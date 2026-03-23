@@ -88,7 +88,7 @@ export default function Home() {
                     <h2 className="text-xl font-bold text-gray-900">{selectedIntersection.name}</h2>
                     <p className="text-sm text-gray-500">Node [{selectedIntersection.nodeId}] · Live Dashboard &amp; Camera Feed</p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setSelectedIntersection(null)}
                     className="p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition text-gray-600"
                   >
@@ -122,8 +122,8 @@ export default function Home() {
             <div className={`${selectedIntersection ? 'w-[50%]' : 'w-full'} h-full relative transition-all duration-300`}>
               <SearchBar onSelect={handleSearchSelect} />
               <ProfileAlerts setActiveTab={handleTabChange} />
-              <MapComponent 
-                onSelectIntersection={setSelectedIntersection} 
+              <MapComponent
+                onSelectIntersection={setSelectedIntersection}
                 selectedIntersection={selectedIntersection}
                 focusIntersection={focusIntersection}
                 onFocusHandled={() => setFocusIntersection(null)}

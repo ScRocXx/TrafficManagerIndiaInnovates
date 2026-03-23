@@ -24,9 +24,9 @@ const intersections: IntersectionData[] = [
 ];
 
 const STATUS_COLORS: Record<string, { hex: string; label: string }> = {
-  Red:    { hex: "#ef4444", label: "CRIT" },
+  Red: { hex: "#ef4444", label: "CRIT" },
   Yellow: { hex: "#f59e0b", label: "MOD" },
-  Green:  { hex: "#64748b", label: "NOM" },
+  Green: { hex: "#64748b", label: "NOM" },
 };
 
 function createTelemetryIcon(item: IntersectionData) {
@@ -57,6 +57,11 @@ function createTelemetryIcon(item: IntersectionData) {
 
 function TelemetryMarkers({ onSelectIntersection, isDark }: { onSelectIntersection: (i: IntersectionData) => void, isDark: boolean }) {
   const map = useMap();
+  const onSelectRef = React.useRef(onSelectIntersection);
+
+  useEffect(() => {
+    onSelectRef.current = onSelectIntersection;
+  }, [onSelectIntersection]);
 
   useEffect(() => {
     const markers: L.Marker[] = [];
@@ -117,7 +122,7 @@ function TelemetryMarkers({ onSelectIntersection, isDark }: { onSelectIntersecti
     return () => {
       markers.forEach((m) => map.removeLayer(m));
     };
-  }, [map, onSelectIntersection, isDark]);
+  }, [map, isDark]);
 
   return null;
 }
@@ -146,7 +151,7 @@ function CustomZoomControl() {
 
 function MapResizer({ selectedIntersection }: { selectedIntersection: IntersectionData | null }) {
   const map = useMap();
-  
+
   useEffect(() => {
     // Staggered invalidations for split-screen flex layout settling
     const timeouts = [100, 350, 750, 1500].map((t) =>
@@ -161,18 +166,24 @@ function MapResizer({ selectedIntersection }: { selectedIntersection: Intersecti
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [map]);
-  
+
   return null;
 }
 
 function FocusHandler({ focusIntersection, onFocusHandled }: { focusIntersection: string | null; onFocusHandled: () => void }) {
   const map = useMap();
+  const onFocusRef = React.useRef(onFocusHandled);
+
+  useEffect(() => {
+    onFocusRef.current = onFocusHandled;
+  }, [onFocusHandled]);
+
   useEffect(() => {
     if (!focusIntersection) return;
     const match = intersections.find((i) => i.name.toLowerCase().includes(focusIntersection.toLowerCase()));
     if (match) map.flyTo([match.lat, match.lng], 15, { duration: 1.2 });
-    onFocusHandled();
-  }, [focusIntersection, map, onFocusHandled]);
+    onFocusRef.current();
+  }, [focusIntersection, map]);
   return null;
 }
 
@@ -217,7 +228,7 @@ export default function MapComponent({ onSelectIntersection, selectedIntersectio
       >
         <TileLayer
           key={isDark ? "dark" : "light"}
-          url={isDark 
+          url={isDark
             ? "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
             : "https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png"
           }

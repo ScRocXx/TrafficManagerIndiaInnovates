@@ -45,20 +45,18 @@ function CameraFeed({ lane }: { lane: LaneData }) {
   return (
     <div className="flex flex-col">
       <div
-        className={`relative aspect-video bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden transition-shadow duration-300 ${
-          isGreen
-            ? "ring-2 ring-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]"
-            : "ring-2 ring-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
-        }`}
+        className={`relative aspect-video bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden transition-shadow duration-300 ${isGreen
+          ? "ring-2 ring-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]"
+          : "ring-2 ring-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
+          }`}
       >
         <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
           <span className={`w-2 h-2 rounded-full animate-pulse ${isGreen ? "bg-green-500" : "bg-red-500"}`} />
           <span className="text-[10px] text-white/80 font-mono uppercase tracking-wider">{lane.direction}</span>
         </div>
         <div className="absolute top-2.5 right-2.5">
-          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${
-            isGreen ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"
-          }`}>{lane.signal}</span>
+          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${isGreen ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"
+            }`}>{lane.signal}</span>
         </div>
         <Video className="w-8 h-8 text-slate-700" />
         <p className="absolute bottom-2.5 text-[10px] text-slate-500 font-mono">Feed connecting...</p>
@@ -126,11 +124,10 @@ function Toast({ toast, onDone }: { toast: ToastData; onDone: () => void }) {
   }, [onDone, toast]);
 
   return (
-    <div className={`fixed top-6 right-6 z-[9998] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-semibold border transition-all animate-[slideIn_0.3s_ease-out] ${
-      toast.type === "success"
-        ? "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800/50"
-        : "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800/50"
-    }`}>
+    <div className={`fixed top-6 right-6 z-[9998] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-semibold border transition-all animate-[slideIn_0.3s_ease-out] ${toast.type === "success"
+      ? "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800/50"
+      : "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800/50"
+      }`}>
       {toast.type === "success" ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
       {toast.message}
     </div>
@@ -162,11 +159,10 @@ function ConsolePinInput({ onResult }: { onResult: (ok: boolean) => void }) {
         onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
         placeholder="PIN"
         autoFocus
-        className={`w-16 text-center text-xs font-mono py-1.5 px-2 rounded-lg border outline-none transition-all placeholder-gray-400 dark:placeholder-slate-600 bg-white dark:bg-slate-800/80 text-gray-800 dark:text-slate-200 ${
-          shake 
-            ? "border-red-500 animate-[shake_0.3s_ease-in-out]" 
-            : "border-gray-300 dark:border-slate-600 focus:border-blue-500 dark:focus:border-cyan-500 focus:ring-1 focus:ring-blue-500/30 dark:focus:ring-cyan-500/30"
-        }`}
+        className={`w-16 text-center text-xs font-mono py-1.5 px-2 rounded-lg border outline-none transition-all placeholder-gray-400 dark:placeholder-slate-600 bg-white dark:bg-slate-800/80 text-gray-800 dark:text-slate-200 ${shake
+          ? "border-red-500 animate-[shake_0.3s_ease-in-out]"
+          : "border-gray-300 dark:border-slate-600 focus:border-blue-500 dark:focus:border-cyan-500 focus:ring-1 focus:ring-blue-500/30 dark:focus:ring-cyan-500/30"
+          }`}
         onKeyDown={(e) => e.key === "Enter" && submit()}
       />
       <button onClick={submit} className="text-[10px] px-2.5 py-1.5 bg-blue-600 dark:bg-cyan-600 hover:bg-blue-500 dark:hover:bg-cyan-500 text-white rounded-md font-semibold transition-colors shadow-sm">
@@ -189,7 +185,7 @@ export default function IntersectionPage() {
   const [laneStates, setLaneStates] = useState<Record<string, "RED" | "YEL" | "GRN">>({
     North: "GRN", South: "RED", East: "RED", West: "GRN",
   });
-  
+
   // Timers and Overrides
   const [laneActive, setLaneActive] = useState<Record<string, boolean>>({
     North: false, South: false, East: false, West: false,
@@ -330,12 +326,10 @@ export default function IntersectionPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${
-              intersection.status === "Red" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : intersection.status === "Yellow" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"
-            }`} />
-            <span className={`text-xs font-bold uppercase tracking-wider ${
-              intersection.status === "Red" ? "text-red-600 dark:text-red-400" : intersection.status === "Yellow" ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"
-            }`}>
+            <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${intersection.status === "Red" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : intersection.status === "Yellow" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"
+              }`} />
+            <span className={`text-xs font-bold uppercase tracking-wider ${intersection.status === "Red" ? "text-red-600 dark:text-red-400" : intersection.status === "Yellow" ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"
+              }`}>
               {intersection.status === "Red" ? "Critical" : intersection.status === "Yellow" ? "Moderate" : "Normal"}
             </span>
           </div>
@@ -405,21 +399,19 @@ export default function IntersectionPage() {
                     const activeTime = laneTimers[dir];
 
                     return (
-                      <div key={dir} className={`rounded-xl border p-3 transition-colors ${
-                        isActive 
-                          ? "bg-white dark:bg-slate-800 border-blue-200 dark:border-cyan-500/30 shadow-sm" 
-                          : "bg-white/50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700/30"
-                      }`}>
+                      <div key={dir} className={`rounded-xl border p-3 transition-colors ${isActive
+                        ? "bg-white dark:bg-slate-800 border-blue-200 dark:border-cyan-500/30 shadow-sm"
+                        : "bg-white/50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700/30"
+                        }`}>
                         {/* Top row: direction + status + action */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className={`w-2.5 h-2.5 rounded-full ${stateColor(current)} shadow-[0_0_6px]`} />
                             <span className="text-sm font-semibold text-gray-800 dark:text-slate-200 w-14 font-mono">{dir}</span>
-                            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                              current === "RED" ? "text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-500/10 border-red-200 dark:border-red-500/30"
+                            <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${current === "RED" ? "text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-500/10 border-red-200 dark:border-red-500/30"
                               : current === "YEL" ? "text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30"
-                              : "text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-500/10 border-green-200 dark:border-green-500/30"
-                            }`}>{current}</span>
+                                : "text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-500/10 border-green-200 dark:border-green-500/30"
+                              }`}>{current}</span>
                             <div className={`text-[10px] font-mono px-2 py-0.5 rounded ${isActive ? "bg-blue-50 dark:bg-cyan-900/40 text-blue-700 dark:text-cyan-400 font-bold" : "text-gray-400 dark:text-slate-600"}`}>
                               {activeTime}s active
                             </div>
@@ -444,15 +436,14 @@ export default function IntersectionPage() {
                               {/* Override Timer Toggle */}
                               <button
                                 onClick={() => handleToggleLaneOverride(dir)}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm ${
-                                  isActive
-                                    ? "bg-blue-500 dark:bg-cyan-600 text-white hover:bg-blue-600 dark:hover:bg-cyan-500"
-                                    : "bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-300 dark:hover:bg-slate-600 border border-transparent dark:border-slate-600/50"
-                                }`}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm ${isActive
+                                  ? "bg-blue-500 dark:bg-cyan-600 text-white hover:bg-blue-600 dark:hover:bg-cyan-500"
+                                  : "bg-gray-200 dark:bg-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-300 dark:hover:bg-slate-600 border border-transparent dark:border-slate-600/50"
+                                  }`}
                               >
                                 {isActive ? <><Power className="w-3 h-3" /> ON</> : <><Power className="w-3 h-3 text-gray-400" /> OFF</>}
                               </button>
-                              
+
                               <button
                                 onClick={() => handleLockLane(dir)}
                                 className="flex items-center gap-1 px-2 py-1.5 bg-white dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600/50 rounded-lg text-[10px] font-bold text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:text-slate-300 transition-colors shadow-sm dark:shadow-none"
@@ -472,11 +463,10 @@ export default function IntersectionPage() {
                                 <button
                                   key={st}
                                   onClick={() => handleSetLaneState(dir, st)}
-                                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border ${
-                                    current === st 
-                                      ? cls + " border-transparent shadow-[0_2px_10px_rgba(0,0,0,0.15)] ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-800 ring-" + (st === "RED" ? "red-400" : st === "YEL" ? "amber-400" : "green-400")
-                                      : "bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600"
-                                  }`}
+                                  className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border ${current === st
+                                    ? cls + " border-transparent shadow-[0_2px_10px_rgba(0,0,0,0.15)] ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-800 ring-" + (st === "RED" ? "red-400" : st === "YEL" ? "amber-400" : "green-400")
+                                    : "bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600"
+                                    }`}
                                 >
                                   {icon} {st}
                                 </button>
@@ -491,21 +481,19 @@ export default function IntersectionPage() {
 
                 {/* Code Red Master Toggle */}
                 <div className="px-4 pb-4 mt-2">
-                  <div className={`rounded-xl border p-3.5 transition-all shadow-sm ${
-                    codeRed
-                      ? "bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-500/40"
-                      : "bg-white dark:bg-slate-800/50 border-gray-200 dark:border-slate-700/30"
-                  }`}>
+                  <div className={`rounded-xl border p-3.5 transition-all shadow-sm ${codeRed
+                    ? "bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-500/40"
+                    : "bg-white dark:bg-slate-800/50 border-gray-200 dark:border-slate-700/30"
+                    }`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
                         <AlertTriangle className={`w-4.5 h-4.5 ${codeRed ? "text-red-500 animate-pulse" : "text-gray-400 dark:text-slate-500"}`} />
                         <span className="text-sm font-bold text-gray-800 dark:text-slate-200">CODE RED</span>
-                        <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
-                          codeRed
-                            ? "text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-500/20 border-red-300 dark:border-red-500/40 animate-pulse"
-                            : "text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-700/50 border-gray-200 dark:border-slate-600/30"
-                        }`}>{codeRed ? "ACTIVE" : "OFF"}</span>
-                        
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${codeRed
+                          ? "text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-500/20 border-red-300 dark:border-red-500/40 animate-pulse"
+                          : "text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-700/50 border-gray-200 dark:border-slate-600/30"
+                          }`}>{codeRed ? "ACTIVE" : "OFF"}</span>
+
                         <div className={`ml-2 text-[10px] font-mono px-2 py-0.5 rounded ${codeRed ? "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 font-bold" : "text-gray-400 dark:text-slate-600"}`}>
                           {codeRedTimer}s active
                         </div>
@@ -516,11 +504,10 @@ export default function IntersectionPage() {
                       ) : (
                         <button
                           onClick={() => setCodeRedPinOpen(true)}
-                          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all shadow-sm ${
-                            codeRed
-                              ? "bg-red-500 dark:bg-red-600 text-white hover:bg-red-600 dark:hover:bg-red-500 shadow-[0_4px_12px_rgba(239,68,68,0.3)]"
-                              : "bg-white dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600/50 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
-                          }`}
+                          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all shadow-sm ${codeRed
+                            ? "bg-red-500 dark:bg-red-600 text-white hover:bg-red-600 dark:hover:bg-red-500 shadow-[0_4px_12px_rgba(239,68,68,0.3)]"
+                            : "bg-white dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600/50 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"
+                            }`}
                         >
                           {codeRed ? <Power className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
                           {codeRed ? "Turn OFF" : "Activate"}
@@ -565,13 +552,13 @@ export default function IntersectionPage() {
       <div className="w-1/2 h-full relative">
         {/* Top Overlays matching Dashboard! */}
         <SearchBar onSelect={handleSearchSelect} />
-        <ProfileAlerts setActiveTab={() => {}} />
+        <ProfileAlerts setActiveTab={() => { }} />
 
         <MapComponent
-          onSelectIntersection={() => {}}
+          onSelectIntersection={() => { }}
           selectedIntersection={null}
           focusIntersection={intersection.name}
-          onFocusHandled={() => {}}
+          onFocusHandled={() => { }}
         />
       </div>
 

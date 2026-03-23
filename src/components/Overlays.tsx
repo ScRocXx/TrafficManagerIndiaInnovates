@@ -4,9 +4,9 @@ import { Search, Bell, UserCircle, AlertCircle, Camera, Navigation, Clock, LogOu
 import { vulnerabilitiesData } from '../app/page';
 
 const mockIntersections = [
-  'ITO Junction', 
-  'AIIMS Intersection', 
-  'Connaught Place', 
+  'ITO Junction',
+  'AIIMS Intersection',
+  'Connaught Place',
   'South Ext',
   'Rajiv Chowk',
   'Karol Bagh',
@@ -63,12 +63,12 @@ export function SearchBar({ onSelect }: { onSelect?: (name: string) => void }) {
           <div className="absolute top-full mt-2 w-full bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-gray-100 dark:border-slate-700 overflow-hidden">
             <ul className="py-2">
               {filtered.map(item => (
-                <li 
-                  key={item} 
+                <li
+                  key={item}
                   onMouseDown={() => handleSelect(item)}
                   className="px-4 py-2 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer text-gray-700 dark:text-gray-300 flex items-center space-x-2"
                 >
-                   <Search className="w-4 h-4 text-gray-400" /> <span>{item}</span>
+                  <Search className="w-4 h-4 text-gray-400" /> <span>{item}</span>
                 </li>
               ))}
             </ul>
@@ -106,7 +106,7 @@ export function ProfileAlerts({ setActiveTab, className = "absolute top-6 right-
     <div className={`${className} z-[1000] flex space-x-3`}>
       {/* Notifications */}
       <div className="relative">
-        <button 
+        <button
           onClick={() => toggleMenu("notifications")}
           className={`w-12 h-12 rounded-full shadow-sm flex items-center justify-center hover:shadow-md transition-all ${openMenu === "notifications" ? "bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-500" : "bg-white dark:bg-slate-800"}`}
         >
@@ -124,8 +124,8 @@ export function ProfileAlerts({ setActiveTab, className = "absolute top-6 right-
             </div>
             <div className="overflow-y-auto w-full">
               {vulnerabilitiesData.map((notif: { id: string, status: string, type: string, last_ping: string, issue: string, location: string }) => (
-                <div 
-                  key={notif.id} 
+                <div
+                  key={notif.id}
                   onClick={() => handleNotificationClick(notif.id)}
                   className="p-4 border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors flex items-start space-x-3"
                 >
@@ -137,7 +137,7 @@ export function ProfileAlerts({ setActiveTab, className = "absolute top-6 right-
                       <span className="font-semibold text-gray-800 dark:text-white text-sm">{notif.type} • {notif.id}</span>
                       <span className="text-xs text-gray-400 flex items-center">
                         <Clock className="w-3 h-3 mr-1" />
-                        {new Date(notif.last_ping).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        {new Date(notif.last_ping).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
                     <p className={`text-sm mb-1 font-medium ${notif.status === 'Critical' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-500'}`}>{notif.issue}</p>
@@ -155,7 +155,7 @@ export function ProfileAlerts({ setActiveTab, className = "absolute top-6 right-
 
       {/* Profile */}
       <div className="relative">
-        <button 
+        <button
           onClick={() => toggleMenu("profile")}
           className={`w-12 h-12 rounded-full shadow-sm flex items-center justify-center hover:shadow-md transition-all ${openMenu === "profile" ? "bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-500" : "bg-white dark:bg-slate-800"}`}
         >
