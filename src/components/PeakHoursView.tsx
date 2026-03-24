@@ -299,7 +299,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
 
               <div className="flex gap-5">
                 {/* Bar Chart */}
-                <div className="flex-1 h-[120px]">
+                <div className="flex-1 h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={item.hourlyData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#1e293b" : "#e2e8f0"} vertical={false} />

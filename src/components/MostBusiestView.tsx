@@ -1,6 +1,8 @@
 "use client";
 import React from "react";
 import { BarChart2, ArrowUpRight, ArrowDownRight, Car, Timer, Flame } from "lucide-react";
+import Link from "next/link";
+import { intersections } from "@/lib/intersections";
 import { ProfileAlerts } from "./Overlays";
 
 const busiestIntersections = [
@@ -93,7 +95,7 @@ export default function MostBusiestView({ setActiveTab }: { setActiveTab?: (tab:
                   <th className="px-6 py-3">Peak</th>
                   <th className="px-6 py-3">Peak Time</th>
                   <th className="px-6 py-3">Avg Wait</th>
-                  <th className="px-6 py-3">Trend</th>
+                  <th className="px-6 py-3">details</th>
                 </tr>
               </thead>
               <tbody>
@@ -113,10 +115,16 @@ export default function MostBusiestView({ setActiveTab }: { setActiveTab?: (tab:
                     <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1 transition-colors"><Timer className="w-3.5 h-3.5" />{item.peakTime}</td>
                     <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 transition-colors">{item.avgWait}</td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-1">
-                        {item.trend === "up" ? <ArrowUpRight className="w-4 h-4 text-sky-500 dark:text-red-500" /> : <ArrowDownRight className="w-4 h-4 text-emerald-500" />}
-                        <span className={`text-sm font-medium transition-colors ${item.trend === "up" ? "text-sky-500 dark:text-red-500" : "text-emerald-500"}`}>{item.change}</span>
-                      </div>
+                      {(() => {
+                        const match = intersections.find(i => i.name === item.name);
+                        return match ? (
+                          <Link href={`/intersection/${match.id}`} className="text-sm font-medium text-sky-500 dark:text-sky-400 hover:underline cursor-pointer transition-colors">
+                            View
+                          </Link>
+                        ) : (
+                          <span className="text-sm font-medium text-gray-400 dark:text-gray-500">N/A</span>
+                        );
+                      })()}
                     </td>
                   </tr>
                 ))}

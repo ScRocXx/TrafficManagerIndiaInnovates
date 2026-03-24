@@ -16,7 +16,7 @@ export const vulnerabilitiesData = [
     id: "V001",
     type: "Camera Offline",
     status: "Critical",
-    last_ping: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+    last_ping: "2026-03-24T04:25:00.000Z",
     issue: "Connection timeout",
     location: "ITO Junction"
   },
@@ -24,7 +24,7 @@ export const vulnerabilitiesData = [
     id: "V002",
     type: "High Latency",
     status: "Yellow",
-    last_ping: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+    last_ping: "2026-03-24T04:15:00.000Z",
     issue: "Network congestion detected",
     location: "AIIMS Intersection"
   },
@@ -32,7 +32,7 @@ export const vulnerabilitiesData = [
     id: "V003",
     type: "Sensor Malfunction",
     status: "Critical",
-    last_ping: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+    last_ping: "2026-03-24T03:45:00.000Z",
     issue: "Inductive loop failure",
     location: "Ashram Chowk"
   },
@@ -40,7 +40,7 @@ export const vulnerabilitiesData = [
     id: "V004",
     type: "Signal Controller Error",
     status: "Yellow",
-    last_ping: new Date(Date.now() - 1000 * 60 * 8).toISOString(),
+    last_ping: "2026-03-24T04:22:00.000Z",
     issue: "Phase timing desync",
     location: "Connaught Place"
   }
@@ -82,7 +82,18 @@ export default function Home() {
         return (
           <>
             {selectedIntersection && (
-              <div className="w-[50%] h-full border-r border-gray-200 bg-white flex flex-col transition-all duration-300">
+              <div className="w-[50%] h-full border-r border-gray-200 bg-white flex flex-col transition-all duration-300 relative z-10 anim-dashboard-open">
+                <style dangerouslySetInnerHTML={{ __html: `
+                  @keyframes dashboardOpenPulse {
+                    0% { box-shadow: inset 0 0 0 4px transparent, 0 0 0 0 rgba(59,130,246,0); transform: translateX(-20px); opacity: 0; }
+                    30% { transform: translateX(0); opacity: 1; }
+                    40% { box-shadow: inset 0 0 0 4px rgba(59,130,246,0.5), 0 0 20px 10px rgba(59,130,246,0.3); }
+                    100% { box-shadow: inset 0 0 0 4px transparent, 0 0 0 0 rgba(59,130,246,0); }
+                  }
+                  .anim-dashboard-open {
+                    animation: dashboardOpenPulse 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                  }
+                `}} />
                 <div className="p-6 border-b border-gray-200 flex justify-between items-center bg-gray-50">
                   <div>
                     <h2 className="text-xl font-bold text-gray-900">{selectedIntersection.name}</h2>
@@ -120,8 +131,15 @@ export default function Home() {
               </div>
             )}
             <div className={`${selectedIntersection ? 'w-[50%]' : 'w-full'} h-full relative transition-all duration-300`}>
-              <SearchBar onSelect={handleSearchSelect} />
-              <ProfileAlerts setActiveTab={handleTabChange} />
+              <div className="absolute top-6 inset-x-6 z-[1000] flex items-start justify-between gap-4 pointer-events-none">
+                <div className="flex-1 hidden md:block" />
+                <div className="pointer-events-auto w-full max-w-[400px]">
+                  <SearchBar onSelect={handleSearchSelect} className="w-full" />
+                </div>
+                <div className="flex-1 flex justify-end pointer-events-auto">
+                  <ProfileAlerts setActiveTab={handleTabChange} className="" />
+                </div>
+              </div>
               <MapComponent
                 onSelectIntersection={setSelectedIntersection}
                 selectedIntersection={selectedIntersection}

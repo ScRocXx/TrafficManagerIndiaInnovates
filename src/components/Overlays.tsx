@@ -28,7 +28,7 @@ const mockIntersections = [
   'Greater Kailash'
 ];
 
-export function SearchBar({ onSelect }: { onSelect?: (name: string) => void }) {
+export function SearchBar({ onSelect, className = "absolute top-6 left-1/2 -translate-x-1/2 z-[1000] w-[400px]" }: { onSelect?: (name: string) => void, className?: string }) {
   const [isFocused, setIsFocused] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -45,7 +45,7 @@ export function SearchBar({ onSelect }: { onSelect?: (name: string) => void }) {
   };
 
   return (
-    <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[1000] w-[400px]">
+    <div className={className}>
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
           <Search className="h-5 w-5 text-gray-400" />
@@ -147,7 +147,7 @@ export function ProfileAlerts({ setActiveTab, className = "absolute top-6 right-
               ))}
             </div>
             <div className="p-3 bg-gray-50 dark:bg-slate-800/80 border-t border-gray-100 dark:border-slate-700 text-center text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 cursor-pointer">
-              View all hardware vulnerabilities
+              View all alerts
             </div>
           </div>
         )}
