@@ -11,6 +11,12 @@ load_dotenv()
 # Once you install PostgreSQL, simply update the DATABASE_URL in your .env file!
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./indiannovate.db")
 
+# Render gives postgres:// but SQLAlchemy requires postgresql://
+if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+print(f"[DB] Using: {SQLALCHEMY_DATABASE_URL[:30]}...")
+
 # SQLite requires a special connection argument
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     engine = create_engine(

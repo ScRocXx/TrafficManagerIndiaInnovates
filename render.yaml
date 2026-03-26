@@ -8,3 +8,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: india-innovate-db
+          property: connectionString
+
+databases:
+  - name: india-innovate-db
+    plan: free
+    databaseName: indiainnovatedb
+    user: indiainnovate

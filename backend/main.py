@@ -59,7 +59,7 @@ def on_mqtt_message(client, userdata, msg):
         db.close()
         print(f"[{datetime.datetime.utcnow().isoformat()}] MQTT INGEST SUCCESS: Node {node_id}")
     except Exception as e:
-        pass # Ignore malformed packets quietly
+        print(f"[MQTT] ERROR processing message: {e}")
 
 def start_mqtt_client():
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, "india-innovate-backend-" + str(uuid.uuid4()))
