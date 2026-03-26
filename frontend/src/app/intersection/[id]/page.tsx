@@ -565,19 +565,26 @@ export default function IntersectionPage() {
           }
           setLaneDensities(newDensities);
 
-          // Only reset wait timers when the active phase changes (signal transition)
-          // Otherwise let the local countdown run freely
-          if (phaseChanged) {
-            let newWait: Record<string, number> = {};
-            for (const key in data.lane_metrics) {
-              const laneObj = data.lane_metrics[key];
-              const suffix = key.split("-").pop() || "";
-              if (suffix) {
-                newWait[suffix] = laneObj.wait_time_T || 0;
-              }
+          // Continuously sync wait timers from Jetson payload
+          let newWait: Record<string, number> = {};
+          for (const key in data.lane_metrics) {
+            const laneObj = data.lane_metrics[key];
+            const suffix = key.split("-").pop() || "";
+            if (suffix) {
+              newWait[suffix] = laneObj.wait_time_T || 0;
             }
-            setLaneWaitTimers(newWait);
           }
+          // The fetch logic provides the baseline.
+          setLaneWaitTimers((prev) => {
+            // Only update if Jetson gives a higher value or explicit 0, mitigating jitter
+            const updated = { ...prev };
+            Object.keys(newWait).forEach(k => {
+              if (newWait[k] === 0 || newWait[k] > (updated[k] || 0)) {
+                updated[k] = newWait[k];
+              }
+            });
+            return updated;
+          });
         }
         
         setEvpCount(data.critical_events?.evp_overrides || 0);
@@ -617,12 +624,12 @@ export default function IntersectionPage() {
         return n;
       });
 
-      // Wait timers: tick DOWN for RED lanes (approaching signal change), reset for GREEN
+      // Wait timers: tick UP for RED lanes (accumulating wait time), reset for GREEN
       setLaneWaitTimers(prev => {
         const n: Record<string, number> = { ...prev };
         for (const dir in laneStates) {
-          if (laneStates[dir] === "RED" && (n[dir] || 0) > 0) {
-            n[dir]--;  // Counting down toward green
+          if (laneStates[dir] === "RED") {
+            n[dir] = (n[dir] || 0) + 1;  // Counting up while vehicles wait
           } else if (laneStates[dir] === "GRN") {
             n[dir] = 0; // Green = no wait
           }
