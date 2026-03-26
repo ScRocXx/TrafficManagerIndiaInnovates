@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Clock, Search, ArrowUpRight, ArrowDownRight, Wrench, Timer, Activity } from "lucide-react";
+import { intersections } from "@/lib/intersections";
 import { ProfileAlerts } from "./Overlays";
 import {
   AreaChart, Area, BarChart, Bar,
@@ -33,117 +34,6 @@ interface IntersectionPeakData {
   hourlyData: { hour: string; vehicles: number }[];
 }
 
-const intersectionData: IntersectionPeakData[] = [
-  {
-    id: "284501", name: "ITO Junction", status: "Red", peakHour: "6:15 PM",
-    peakVolume: 14200, avgPValue: 0.85, maxCongestionHrs: 4.2, clearanceWindow: "11 PM – 5 AM",
-    hourlyData: [
-      { hour: "6AM", vehicles: 1800 }, { hour: "8AM", vehicles: 6200 }, { hour: "10AM", vehicles: 4100 },
-      { hour: "12PM", vehicles: 4800 }, { hour: "2PM", vehicles: 4200 }, { hour: "4PM", vehicles: 7800 },
-      { hour: "6PM", vehicles: 14200 }, { hour: "8PM", vehicles: 8100 }, { hour: "10PM", vehicles: 2400 },
-    ]
-  },
-  {
-    id: "284502", name: "AIIMS", status: "Red", peakHour: "6:30 PM",
-    peakVolume: 12800, avgPValue: 0.92, maxCongestionHrs: 3.8, clearanceWindow: "11 PM – 5 AM",
-    hourlyData: [
-      { hour: "6AM", vehicles: 1500 }, { hour: "8AM", vehicles: 5800 }, { hour: "10AM", vehicles: 3900 },
-      { hour: "12PM", vehicles: 4200 }, { hour: "2PM", vehicles: 3800 }, { hour: "4PM", vehicles: 7200 },
-      { hour: "6PM", vehicles: 12800 }, { hour: "8PM", vehicles: 7600 }, { hour: "10PM", vehicles: 2100 },
-    ]
-  },
-  {
-    id: "284507", name: "Ashram Chowk", status: "Red", peakHour: "5:45 PM",
-    peakVolume: 13500, avgPValue: 0.88, maxCongestionHrs: 4.0, clearanceWindow: "10:30 PM – 5:30 AM",
-    hourlyData: [
-      { hour: "6AM", vehicles: 2100 }, { hour: "8AM", vehicles: 6800 }, { hour: "10AM", vehicles: 4500 },
-      { hour: "12PM", vehicles: 5100 }, { hour: "2PM", vehicles: 4600 }, { hour: "4PM", vehicles: 8200 },
-      { hour: "6PM", vehicles: 13500 }, { hour: "8PM", vehicles: 7900 }, { hour: "10PM", vehicles: 2800 },
-    ]
-  },
-  {
-    id: "284503", name: "Connaught Place", status: "Yellow", peakHour: "1:00 PM",
-    peakVolume: 9100, avgPValue: 0.60, maxCongestionHrs: 2.5, clearanceWindow: "9 PM – 6 AM",
-    hourlyData: [
-      { hour: "6AM", vehicles: 900 }, { hour: "8AM", vehicles: 3200 }, { hour: "10AM", vehicles: 5100 },
-      { hour: "12PM", vehicles: 8200 }, { hour: "2PM", vehicles: 7100 }, { hour: "4PM", vehicles: 5800 },
-      { hour: "6PM", vehicles: 9100 }, { hour: "8PM", vehicles: 4200 }, { hour: "10PM", vehicles: 1800 },
-    ]
-  },
-  {
-    id: "284504", name: "South Ext", status: "Red", peakHour: "6:00 PM",
-    peakVolume: 10500, avgPValue: 0.75, maxCongestionHrs: 3.2, clearanceWindow: "10 PM – 5 AM",
-    hourlyData: [
-      { hour: "6AM", vehicles: 1200 }, { hour: "8AM", vehicles: 4500 }, { hour: "10AM", vehicles: 3600 },
-      { hour: "12PM", vehicles: 4100 }, { hour: "2PM", vehicles: 3900 }, { hour: "4PM", vehicles: 6200 },
-      { hour: "6PM", vehicles: 10500 }, { hour: "8PM", vehicles: 5800 }, { hour: "10PM", vehicles: 2000 },
-    ]
-  },
-  {
-    id: "284506", name: "Kashmere Gate", status: "Yellow", peakHour: "9:00 AM",
-    peakVolume: 8700, avgPValue: 0.55, maxCongestionHrs: 2.1, clearanceWindow: "8 PM – 6 AM",
-    hourlyData: [
-      { hour: "6AM", vehicles: 2800 }, { hour: "8AM", vehicles: 7200 }, { hour: "10AM", vehicles: 8700 },
-      { hour: "12PM", vehicles: 5400 }, { hour: "2PM", vehicles: 4800 }, { hour: "4PM", vehicles: 5600 },
-      { hour: "6PM", vehicles: 6200 }, { hour: "8PM", vehicles: 3100 }, { hour: "10PM", vehicles: 1200 },
-    ]
-  },
-  {
-    id: "284511", name: "Raja Garden", status: "Red", peakHour: "5:30 PM",
-    peakVolume: 11900, avgPValue: 0.78, maxCongestionHrs: 3.5, clearanceWindow: "10 PM – 5:30 AM",
-    hourlyData: [
-      { hour: "6AM", vehicles: 1600 }, { hour: "8AM", vehicles: 5200 }, { hour: "10AM", vehicles: 4000 },
-      { hour: "12PM", vehicles: 4600 }, { hour: "2PM", vehicles: 4200 }, { hour: "4PM", vehicles: 7400 },
-      { hour: "6PM", vehicles: 11900 }, { hour: "8PM", vehicles: 6800 }, { hour: "10PM", vehicles: 2200 },
-    ]
-  },
-  {
-    id: "284509", name: "Karol Bagh", status: "Yellow", peakHour: "7:00 PM",
-    peakVolume: 7200, avgPValue: 0.45, maxCongestionHrs: 1.8, clearanceWindow: "9 PM – 6:30 AM",
-    hourlyData: [
-      { hour: "6AM", vehicles: 800 }, { hour: "8AM", vehicles: 2800 }, { hour: "10AM", vehicles: 3200 },
-      { hour: "12PM", vehicles: 4100 }, { hour: "2PM", vehicles: 3800 }, { hour: "4PM", vehicles: 5200 },
-      { hour: "6PM", vehicles: 7200 }, { hour: "8PM", vehicles: 4800 }, { hour: "10PM", vehicles: 1600 },
-    ]
-  },
-  {
-    id: "284505", name: "Dhaula Kuan", status: "Green", peakHour: "5:00 PM",
-    peakVolume: 5200, avgPValue: 0.25, maxCongestionHrs: 1.0, clearanceWindow: "8 PM – 7 AM",
-    hourlyData: [
-      { hour: "6AM", vehicles: 600 }, { hour: "8AM", vehicles: 2200 }, { hour: "10AM", vehicles: 2800 },
-      { hour: "12PM", vehicles: 3100 }, { hour: "2PM", vehicles: 2900 }, { hour: "4PM", vehicles: 4200 },
-      { hour: "6PM", vehicles: 5200 }, { hour: "8PM", vehicles: 3400 }, { hour: "10PM", vehicles: 1100 },
-    ]
-  },
-  {
-    id: "284508", name: "Laxmi Nagar", status: "Green", peakHour: "8:30 AM",
-    peakVolume: 5800, avgPValue: 0.30, maxCongestionHrs: 1.2, clearanceWindow: "8 PM – 7 AM",
-    hourlyData: [
-      { hour: "6AM", vehicles: 1200 }, { hour: "8AM", vehicles: 5800 }, { hour: "10AM", vehicles: 3400 },
-      { hour: "12PM", vehicles: 2800 }, { hour: "2PM", vehicles: 2600 }, { hour: "4PM", vehicles: 3800 },
-      { hour: "6PM", vehicles: 4200 }, { hour: "8PM", vehicles: 2400 }, { hour: "10PM", vehicles: 900 },
-    ]
-  },
-  {
-    id: "284510", name: "Moolchand", status: "Green", peakHour: "6:45 PM",
-    peakVolume: 4100, avgPValue: 0.20, maxCongestionHrs: 0.8, clearanceWindow: "7 PM – 7 AM",
-    hourlyData: [
-      { hour: "6AM", vehicles: 500 }, { hour: "8AM", vehicles: 1800 }, { hour: "10AM", vehicles: 2200 },
-      { hour: "12PM", vehicles: 2600 }, { hour: "2PM", vehicles: 2400 }, { hour: "4PM", vehicles: 3200 },
-      { hour: "6PM", vehicles: 4100 }, { hour: "8PM", vehicles: 2800 }, { hour: "10PM", vehicles: 800 },
-    ]
-  },
-  {
-    id: "284512", name: "Akshardham", status: "Green", peakHour: "9:15 AM",
-    peakVolume: 3600, avgPValue: 0.15, maxCongestionHrs: 0.5, clearanceWindow: "7 PM – 7 AM",
-    hourlyData: [
-      { hour: "6AM", vehicles: 800 }, { hour: "8AM", vehicles: 3200 }, { hour: "10AM", vehicles: 3600 },
-      { hour: "12PM", vehicles: 2400 }, { hour: "2PM", vehicles: 2100 }, { hour: "4PM", vehicles: 2800 },
-      { hour: "6PM", vehicles: 3200 }, { hour: "8PM", vehicles: 1800 }, { hour: "10PM", vehicles: 600 },
-    ]
-  },
-];
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function CustomTooltip({ active, payload, label, isDark }: any) {
   if (!active || !payload?.length) return null;
@@ -161,7 +51,7 @@ function CustomTooltip({ active, payload, label, isDark }: any) {
 export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: string) => void }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDark, setIsDark] = useState(false);
-  const [data, setData] = useState<IntersectionPeakData[]>(intersectionData);
+  const [data, setData] = useState<IntersectionPeakData[]>([]);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
