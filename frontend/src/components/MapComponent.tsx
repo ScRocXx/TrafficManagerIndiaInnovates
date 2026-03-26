@@ -40,23 +40,53 @@ function createTelemetryIcon(item: IntersectionData) {
   });
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 function TelemetryMarkers({ onSelectIntersection, isDark }: { onSelectIntersection: (i: IntersectionData) => void, isDark: boolean }) {
   const map = useMap();
   const onSelectRef = React.useRef(onSelectIntersection);
+  const [liveStatus, setLiveStatus] = useState<Record<string, { status: string; congestionLevel: number }>>({});
 
   useEffect(() => {
     onSelectRef.current = onSelectIntersection;
   }, [onSelectIntersection]);
 
+  // Poll live traffic data for map marker status colors
+  useEffect(() => {
+    const fetchLive = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+        const res = await fetch(`${API_URL}/api/traffic`);
+        if (!res.ok) return;
+        const data: any[] = await res.json();
+        const statusMap: Record<string, { status: string; congestionLevel: number }> = {};
+        data.forEach((d: any) => {
+          statusMap[d.nodeId] = { status: d.status || "Green", congestionLevel: d.congestionLevel || 0 };
+        });
+        setLiveStatus(statusMap);
+      } catch (e) {
+        // Silently fallback to static data
+      }
+    };
+    fetchLive();
+    const interval = setInterval(fetchLive, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     const markers: L.Marker[] = [];
 
     intersections.forEach((item) => {
-      const { hex } = STATUS_COLORS[item.status] || STATUS_COLORS.Green;
-      const statusLabel = item.status === "Red" ? "Critical" : item.status === "Yellow" ? "Moderate" : "Normal";
+      // Merge live status if available
+      const live = liveStatus[item.nodeId];
+      const currentStatus = live?.status || item.status;
+      const currentP = live ? live.congestionLevel : item.p;
+      const enrichedItem = { ...item, status: currentStatus, p: currentP };
+
+      const { hex } = STATUS_COLORS[currentStatus] || STATUS_COLORS.Green;
+      const statusLabel = currentStatus === "Red" ? "Critical" : currentStatus === "Yellow" ? "Moderate" : "Normal";
 
       const marker = L.marker([item.lat, item.lng], {
-        icon: createTelemetryIcon(item),
+        icon: createTelemetryIcon(enrichedItem),
         interactive: true,
       });
 
@@ -68,7 +98,7 @@ function TelemetryMarkers({ onSelectIntersection, isDark }: { onSelectIntersecti
             <span style="width:7px;height:7px;border-radius:50%;background:${hex};display:inline-block;"></span>
             <span style="font-size:11px;${isDark ? 'color:#94a3b8' : 'color:#475569'};font-weight:500;">${statusLabel}</span>
             <span style="color:#cbd5e1;margin:0 2px;">·</span>
-            <span style="font-size:11px;${isDark ? 'color:#94a3b8' : 'color:#475569'};">P-Value: <strong style="${isDark ? 'color:#f8fafc' : 'color:#1e293b'};">${item.p.toFixed(2)}</strong></span>
+            <span style="font-size:11px;${isDark ? 'color:#94a3b8' : 'color:#475569'};">P-Value: <strong style="${isDark ? 'color:#f8fafc' : 'color:#1e293b'};">${currentP.toFixed(2)}</strong></span>
           </div>
           <button
             id="btn-view-${item.id}"
@@ -107,7 +137,7 @@ function TelemetryMarkers({ onSelectIntersection, isDark }: { onSelectIntersecti
     return () => {
       markers.forEach((m) => map.removeLayer(m));
     };
-  }, [map, isDark]);
+  }, [map, isDark, liveStatus]);
 
   return null;
 }

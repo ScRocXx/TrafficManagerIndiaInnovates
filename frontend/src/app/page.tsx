@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Sidebar from '@/components/Sidebar';
 import { SearchBar, ProfileAlerts } from '@/components/Overlays';
@@ -51,10 +51,44 @@ const MapComponent = dynamic(
   { ssr: false }
 );
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export default function Home() {
   const [selectedIntersection, setSelectedIntersection] = useState<IntersectionData | null>(null);
   const [activeTab, setActiveTab] = useState("Delhi Map");
   const [focusIntersection, setFocusIntersection] = useState<string | null>(null);
+  
+  // State for live selected intersection data
+  const [liveData, setLiveData] = useState<{status: string, p: number} | null>(null);
+
+  // Poll for live data when an intersection is selected
+  useEffect(() => {
+    if (!selectedIntersection) {
+      setLiveData(null);
+      return;
+    }
+    
+    const fetchLive = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+        const res = await fetch(`${API_URL}/api/traffic`);
+        if (!res.ok) return;
+        const data: any[] = await res.json();
+        const liveMatch = data.find((d: any) => d.nodeId === selectedIntersection.nodeId);
+        if (liveMatch) {
+          setLiveData({
+            status: liveMatch.status || "Green",
+            p: liveMatch.congestionLevel || 0
+          });
+        }
+      } catch (e) {
+        console.error("Failed to fetch live intersection details", e);
+      }
+    };
+    
+    fetchLive();
+    const interval = setInterval(fetchLive, 5000);
+    return () => clearInterval(interval);
+  }, [selectedIntersection]);
 
   const handleSearchSelect = (name: string) => {
     setActiveTab("Delhi Map");
@@ -79,6 +113,9 @@ export default function Home() {
         return <HardwareVulnerabilityView setActiveTab={handleTabChange} />;
       case "Delhi Map":
       default:
+        const currentStatus = liveData ? liveData.status : (selectedIntersection?.status || "Green");
+        const currentP = liveData ? liveData.p.toFixed(2) : (selectedIntersection?.p.toFixed(2) || "0.00");
+        
         return (
           <>
             {selectedIntersection && (
@@ -123,13 +160,13 @@ export default function Home() {
                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                       <p className="text-sm text-gray-500 mb-2 font-medium">Status</p>
                       <p className="font-bold text-xl text-gray-900 flex items-center gap-2">
-                        <span className={`w-3.5 h-3.5 rounded-full ${selectedIntersection.status === 'Red' ? 'bg-red-500' : selectedIntersection.status === 'Yellow' ? 'bg-amber-400' : 'bg-slate-400'}`}></span>
-                        {selectedIntersection.status === 'Green' ? 'Normal' : selectedIntersection.status === 'Yellow' ? 'Moderate' : 'Heavy'}
+                        <span className={`w-3.5 h-3.5 rounded-full ${currentStatus === 'Red' ? 'bg-red-500' : currentStatus === 'Yellow' ? 'bg-amber-400' : 'bg-slate-400'}`}></span>
+                        {currentStatus === 'Green' ? 'Normal' : currentStatus === 'Yellow' ? 'Moderate' : 'Heavy'}
                       </p>
                     </div>
                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                       <p className="text-sm text-gray-500 mb-2 font-medium">P-Value</p>
-                      <p className="font-bold text-xl text-gray-900">{selectedIntersection.p}</p>
+                      <p className="font-bold text-xl text-gray-900">{currentP}</p>
                     </div>
                   </div>
                 </div>

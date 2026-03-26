@@ -1,24 +1,26 @@
 "use client";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { BarChart2, ArrowUpRight, ArrowDownRight, Car, Timer, Flame } from "lucide-react";
 import Link from "next/link";
 import { intersections } from "@/lib/intersections";
 import { ProfileAlerts } from "./Overlays";
 
-const busiestIntersections = [
-  { rank: 1, name: "ITO Junction", avgVehicles: 9800, peakVehicles: 14200, peakTime: "6:15 PM", avgWait: "14 min", trend: "up", change: "+8%", status: "Red" },
-  { rank: 2, name: "Ashram Chowk", avgVehicles: 9200, peakVehicles: 13500, peakTime: "5:45 PM", avgWait: "12 min", trend: "up", change: "+5%", status: "Red" },
-  { rank: 3, name: "AIIMS", avgVehicles: 8900, peakVehicles: 12800, peakTime: "6:30 PM", avgWait: "11 min", trend: "down", change: "-2%", status: "Red" },
-  { rank: 4, name: "Raja Garden", avgVehicles: 8100, peakVehicles: 11900, peakTime: "5:30 PM", avgWait: "9 min", trend: "up", change: "+12%", status: "Red" },
-  { rank: 5, name: "South Ext", avgVehicles: 7600, peakVehicles: 10500, peakTime: "6:00 PM", avgWait: "8 min", trend: "down", change: "-1%", status: "Red" },
-  { rank: 6, name: "Connaught Place", avgVehicles: 6800, peakVehicles: 9100, peakTime: "1:00 PM", avgWait: "7 min", trend: "up", change: "+3%", status: "Yellow" },
-  { rank: 7, name: "Kashmere Gate", avgVehicles: 6200, peakVehicles: 8700, peakTime: "9:00 AM", avgWait: "6 min", trend: "down", change: "-4%", status: "Yellow" },
-  { rank: 8, name: "Karol Bagh", avgVehicles: 5500, peakVehicles: 7200, peakTime: "7:00 PM", avgWait: "5 min", trend: "up", change: "+1%", status: "Yellow" },
-  { rank: 9, name: "Laxmi Nagar", avgVehicles: 4200, peakVehicles: 5800, peakTime: "8:30 AM", avgWait: "3 min", trend: "down", change: "-6%", status: "Green" },
-  { rank: 10, name: "Dhaula Kuan", avgVehicles: 3800, peakVehicles: 5200, peakTime: "5:00 PM", avgWait: "3 min", trend: "down", change: "-3%", status: "Green" },
-  { rank: 11, name: "Moolchand", avgVehicles: 3200, peakVehicles: 4100, peakTime: "6:45 PM", avgWait: "2 min", trend: "down", change: "-7%", status: "Green" },
-  { rank: 12, name: "Akshardham", avgVehicles: 2800, peakVehicles: 3600, peakTime: "9:15 AM", avgWait: "1 min", trend: "down", change: "-5%", status: "Green" },
+const baseBusiestIntersections = [
+  { rank: 1, name: "ITO Junction", nodeId: "284501", avgVehicles: 9800, peakVehicles: 14200, peakTime: "6:15 PM", avgWait: "14 min", trend: "up", change: "+8%", status: "Red" },
+  { rank: 2, name: "Ashram Chowk", nodeId: "284507", avgVehicles: 9200, peakVehicles: 13500, peakTime: "5:45 PM", avgWait: "12 min", trend: "up", change: "+5%", status: "Red" },
+  { rank: 3, name: "AIIMS", nodeId: "284502", avgVehicles: 8900, peakVehicles: 12800, peakTime: "6:30 PM", avgWait: "11 min", trend: "down", change: "-2%", status: "Red" },
+  { rank: 4, name: "Raja Garden", nodeId: "284511", avgVehicles: 8100, peakVehicles: 11900, peakTime: "5:30 PM", avgWait: "9 min", trend: "up", change: "+12%", status: "Red" },
+  { rank: 5, name: "South Ext", nodeId: "284504", avgVehicles: 7600, peakVehicles: 10500, peakTime: "6:00 PM", avgWait: "8 min", trend: "down", change: "-1%", status: "Red" },
+  { rank: 6, name: "Connaught Place", nodeId: "284503", avgVehicles: 6800, peakVehicles: 9100, peakTime: "1:00 PM", avgWait: "7 min", trend: "up", change: "+3%", status: "Yellow" },
+  { rank: 7, name: "Kashmere Gate", nodeId: "284506", avgVehicles: 6200, peakVehicles: 8700, peakTime: "9:00 AM", avgWait: "6 min", trend: "down", change: "-4%", status: "Yellow" },
+  { rank: 8, name: "Karol Bagh", nodeId: "284509", avgVehicles: 5500, peakVehicles: 7200, peakTime: "7:00 PM", avgWait: "5 min", trend: "up", change: "+1%", status: "Yellow" },
+  { rank: 9, name: "Laxmi Nagar", nodeId: "284508", avgVehicles: 4200, peakVehicles: 5800, peakTime: "8:30 AM", avgWait: "3 min", trend: "down", change: "-6%", status: "Green" },
+  { rank: 10, name: "Dhaula Kuan", nodeId: "284505", avgVehicles: 3800, peakVehicles: 5200, peakTime: "5:00 PM", avgWait: "3 min", trend: "down", change: "-3%", status: "Green" },
+  { rank: 11, name: "Moolchand", nodeId: "284510", avgVehicles: 3200, peakVehicles: 4100, peakTime: "6:45 PM", avgWait: "2 min", trend: "down", change: "-7%", status: "Green" },
+  { rank: 12, name: "Akshardham", nodeId: "284512", avgVehicles: 2800, peakVehicles: 3600, peakTime: "9:15 AM", avgWait: "1 min", trend: "down", change: "-5%", status: "Green" },
 ];
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const statusDot: Record<string, string> = {
   Red: "bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.8)] dark:bg-red-500 dark:shadow-[0_0_8px_rgba(239,68,68,0.8)]",
@@ -27,6 +29,43 @@ const statusDot: Record<string, string> = {
 };
 
 export default function MostBusiestView({ setActiveTab }: { setActiveTab?: (tab: string) => void }) {
+  const [busiestIntersections, setBusiestIntersections] = useState(baseBusiestIntersections);
+
+  useEffect(() => {
+    const fetchLive = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+        const res = await fetch(`${API_URL}/api/traffic`);
+        if (!res.ok) return;
+        const liveData: any[] = await res.json();
+        
+        setBusiestIntersections(prev => {
+          const updated = prev.map(item => {
+            const live = liveData.find((l: any) => l.nodeId === item.nodeId);
+            if (live) {
+              return {
+                ...item,
+                avgVehicles: live.vehiclesPassed > 0 ? live.vehiclesPassed : item.avgVehicles,
+                peakVehicles: live.vehiclesPassed > item.peakVehicles ? live.vehiclesPassed : item.peakVehicles,
+                status: live.status || item.status,
+                avgWait: live.avgWaitTime > 0 ? `${live.avgWaitTime} min` : item.avgWait,
+              };
+            }
+            return item;
+          });
+          // Re-sort by avgVehicles and reassign ranks
+          updated.sort((a, b) => b.avgVehicles - a.avgVehicles);
+          return updated.map((item, idx) => ({ ...item, rank: idx + 1 }));
+        });
+      } catch (e) {
+        console.error("Traffic API offline", e);
+      }
+    };
+    fetchLive();
+    const interval = setInterval(fetchLive, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   const sorted = [...busiestIntersections].sort((a, b) => b.avgVehicles - a.avgVehicles);
 
   return (
@@ -118,7 +157,7 @@ export default function MostBusiestView({ setActiveTab }: { setActiveTab?: (tab:
                       {(() => {
                         const match = intersections.find(i => i.name === item.name);
                         return match ? (
-                          <Link href={`/intersection/${match.nodeId}`} className="text-sm font-medium text-sky-500 dark:text-sky-400 hover:underline cursor-pointer transition-colors">
+                          <Link href={`/intersection/${match.id}`} className="text-sm font-medium text-sky-500 dark:text-sky-400 hover:underline cursor-pointer transition-colors">
                             View
                           </Link>
                         ) : (
