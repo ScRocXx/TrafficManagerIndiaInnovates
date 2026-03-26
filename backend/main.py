@@ -21,7 +21,7 @@ app = FastAPI(title="India Innovate Traffic Backend")
 # Allow Next.js (port 3000) to communicate with this backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000","http://127.0.0.1:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -45,13 +45,14 @@ def on_mqtt_message(client, userdata, msg):
         if not node_id:
             return
             
+        events = raw_data.get("critical_events_this_minus_cycle") or raw_data.get("critical_events_this_minute", {})
         db = database.SessionLocal()
         db_metrics = models.TrafficMetricsRecord(
             node_id=node_id,
             timestamp=raw_data.get("timestamp", datetime.datetime.utcnow().isoformat()),
             state_snapshot=raw_data.get("state_snapshot", {}),
             lane_metrics=raw_data.get("lane_metrics", {}),
-            critical_events_this_minute=raw_data.get("critical_events_this_minute", {})
+            critical_events_this_minute=events
         )
         db.add(db_metrics)
         db.commit()
@@ -90,6 +91,7 @@ class StateSnapshot(BaseModel):
     active_phase: str
     engine_state: str
     box_gridlock_pct: float
+    trigger: str | None = None
 
 class LaneMetric(BaseModel):
     queue_N: int
@@ -105,7 +107,8 @@ class TrafficPayload(BaseModel):
     timestamp: datetime.datetime
     state_snapshot: StateSnapshot
     lane_metrics: dict[str, LaneMetric]
-    critical_events_this_minute: CriticalEvents
+    critical_events_this_minute: CriticalEvents | None = None
+    critical_events_this_minus_cycle: CriticalEvents | None = None
 
 class OverrideRequest(BaseModel):
     nodeId: str
@@ -142,12 +145,16 @@ def ingest_traffic(data: TrafficPayload, db: Session = Depends(database.get_db))
     Endpoint for Jetson devices to send real-time traffic inference results.
     Saves the metrics to PostgreSQL.
     """
+    events = data.critical_events_this_minus_cycle or data.critical_events_this_minute
+    if not events:
+        events = CriticalEvents(evp_overrides=0, gridlock_triggers=0)
+
     db_metrics = models.TrafficMetricsRecord(
         node_id=data.nodeId,
         timestamp=data.timestamp,
         state_snapshot=data.state_snapshot.dict(),
         lane_metrics={k: v.dict() for k, v in data.lane_metrics.items()},
-        critical_events_this_minute=data.critical_events_this_minute.dict()
+        critical_events_this_minute=events.dict()
     )
     db.add(db_metrics)
     db.commit()

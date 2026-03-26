@@ -11,7 +11,7 @@ import { IntersectionData, intersections } from '@/lib/intersections';
 const STATUS_COLORS: Record<string, { hex: string; label: string }> = {
   Red: { hex: "#ef4444", label: "CRIT" },
   Yellow: { hex: "#f59e0b", label: "MOD" },
-  Green: { hex: "#64748b", label: "NOM" },
+  Green: { hex: "#12aa1eff", label: "NOM" },
 };
 
 function createTelemetryIcon(item: IntersectionData) {
