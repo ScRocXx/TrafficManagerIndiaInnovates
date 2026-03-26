@@ -576,10 +576,10 @@ export default function IntersectionPage() {
           }
           // The fetch logic provides the baseline.
           setLaneWaitTimers((prev) => {
-            // Only update if Jetson gives a higher value or explicit 0, mitigating jitter
+            // Only update if Jetson gives a strictly higher value, preventing explicit 0 overwrites on RED lanes
             const updated = { ...prev };
             Object.keys(newWait).forEach(k => {
-              if (newWait[k] === 0 || newWait[k] > (updated[k] || 0)) {
+              if (newWait[k] > (updated[k] || 0)) {
                 updated[k] = newWait[k];
               }
             });
