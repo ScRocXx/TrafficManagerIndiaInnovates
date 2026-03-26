@@ -546,10 +546,17 @@ export default function IntersectionPage() {
           if (engineState.includes("YELLOW") || engineState.includes("YEL")) {
              newLaneStates[mappedDir] = "YEL";
           } else {
-             newLaneStates[mappedDir] = "GRN";
              const gt = data.state_snapshot?.green_timer;
              if (typeof gt === "number") {
-               setLaneGreenTimers(prev => ({ ...prev, [mappedDir]: gt }));
+               setLaneGreenTimers(prev => {
+                 const current = prev[mappedDir] || 0;
+                 // Prevent jitter backwards: Only adopt Jetson's timer if it's lower (time passed),
+                 // OR if it's significantly higher (meaning a phase extension or a brand new green light)
+                 if (current === 0 || gt < current || gt > current + 3) {
+                   return { ...prev, [mappedDir]: gt };
+                 }
+                 return prev;
+               });
              }
           }
         }
