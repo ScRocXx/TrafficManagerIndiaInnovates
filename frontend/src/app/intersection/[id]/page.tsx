@@ -18,7 +18,7 @@ const MapComponent = dynamic(
 /* ── Lane mock data ── */
 interface LaneData {
   direction: string;
-  signal: "GREEN" | "RED";
+  signal: "GRN" | "RED" | "YEL";
   density: string;
   waitTime: string;
   greenTime: string;
@@ -476,6 +476,10 @@ export default function IntersectionPage() {
   const [laneWaitTimers, setLaneWaitTimers] = useState<Record<string, number>>({
     North: 0, South: 32, East: 48, West: 20
   });
+  const [laneDensities, setLaneDensities] = useState<Record<string, string>>({
+    North: "72%", South: "58%", East: "85%", West: "41%"
+  });
+  const [evpCount, setEvpCount] = useState<number>(0);
 
   // Timers and Overrides
   const [laneActive, setLaneActive] = useState<Record<string, boolean>>({
@@ -513,11 +517,67 @@ export default function IntersectionPage() {
     setAuditLog((prev) => [{ time, dir, state, reason, officer: "Officer #214" }, ...prev]);
   }, []);
 
+  const LANE_MAP: Record<string, string> = { "01": "North", "02": "South", "03": "East", "04": "West", "A": "North", "B": "South", "C": "East", "D": "West" };
+
+  useEffect(() => {
+    if (!intersection?.nodeId) return;
+    
+    const fetchTraffic = async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/traffic/${intersection.nodeId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        let newLaneStates: Record<string, "RED" | "YEL" | "GRN"> = { North: "RED", South: "RED", East: "RED", West: "RED" };
+        const activePhaseFull = data.state_snapshot?.active_phase;
+        if (activePhaseFull) {
+          const suffix = activePhaseFull.split("-").pop() || "";
+          const mappedDir = LANE_MAP[suffix] || "North";
+          
+          let engineState = data.state_snapshot?.engine_state || "BASE_GREEN";
+          if (engineState.includes("YELLOW") || engineState.includes("YEL")) {
+             newLaneStates[mappedDir] = "YEL";
+          } else {
+             newLaneStates[mappedDir] = "GRN";
+          }
+        }
+        
+        setLaneStates(newLaneStates as Record<string, "RED" | "YEL" | "GRN">);
+        
+        if (data.lane_metrics) {
+          let newDensities = { ...laneDensities };
+          let newWait = { ...laneWaitTimers };
+          for (const key in data.lane_metrics) {
+            const laneObj = data.lane_metrics[key];
+            const suffix = key.split("-").pop() || "";
+            const dir = LANE_MAP[suffix];
+            if (dir) {
+              const q = laneObj.queue_N || 0;
+              newDensities[dir] = `${Math.min(100, Math.round((q / 120) * 100))}%`;
+              newWait[dir] = laneObj.wait_time_T || 0;
+            }
+          }
+          setLaneDensities(newDensities);
+          setLaneWaitTimers(newWait);
+        }
+        
+        setEvpCount(data.critical_events?.evp_overrides || 0);
+
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchTraffic();
+    const interval = setInterval(fetchTraffic, 1500);
+    return () => clearInterval(interval);
+  }, [intersection]);
+
   // Global Tick for Timers
   useEffect(() => {
     const tick = setInterval(() => {
       setLaneTimers(prev => {
-        const next = { ...prev };
+        const next: Record<string, number> = { ...prev };
         for (const dir in laneActive) {
           if (laneActive[dir]) next[dir]++;
         }
@@ -528,19 +588,15 @@ export default function IntersectionPage() {
       }
       
       setLaneGreenTimers(prev => {
-        const n = { ...prev };
+        const n: Record<string, number> = { ...prev };
         for (const dir in laneStates) {
-          if (laneStates[dir] === "GRN" && n[dir] > 0) n[dir]--;
+          if (laneStates[dir] === "GRN" && (n[dir] || 0) > 0) {
+            n[dir]--;
+          }
         }
         return n;
       });
-      setLaneWaitTimers(prev => {
-        const n = { ...prev };
-        for (const dir in laneStates) {
-          if (laneStates[dir] === "RED") n[dir]++;
-        }
-        return n;
-      });
+      // WaitTimer ticking is now controlled purely via Jetson API hardware heartbeat source
     }, 1000);
     return () => clearInterval(tick);
   }, [laneActive, codeRed, laneStates]);

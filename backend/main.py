@@ -220,6 +220,22 @@ def get_latest_traffic(db: Session = Depends(database.get_db)):
             })
     return frontend_traffic
 
+@app.get("/api/traffic/{node_id}")
+def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
+    """Returns the raw detailed metric payload for a specific intersection"""
+    record = db.query(models.TrafficMetricsRecord).filter(models.TrafficMetricsRecord.node_id == node_id).order_by(models.TrafficMetricsRecord.timestamp.desc()).first()
+    if not record:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Node not found")
+    
+    return {
+        "nodeId": record.node_id,
+        "timestamp": record.timestamp.isoformat(),
+        "state_snapshot": record.state_snapshot,
+        "lane_metrics": record.lane_metrics,
+        "critical_events": record.critical_events_this_minute
+    }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
