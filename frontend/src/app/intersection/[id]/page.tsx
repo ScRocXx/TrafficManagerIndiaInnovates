@@ -504,6 +504,9 @@ export default function IntersectionPage() {
   const [codeRed, setCodeRed] = useState(false);
   const [codeRedTimer, setCodeRedTimer] = useState<number>(0);
 
+  // Live status from API
+  const [liveStatus, setLiveStatus] = useState<string>("Green");
+
   const id = params?.id as string;
   const intersection = intersections.find((i) => i.nodeId === id || i.id === Number(id));
 
@@ -578,6 +581,7 @@ export default function IntersectionPage() {
         }
         
         setEvpCount(data.critical_events?.evp_overrides || 0);
+        setLiveStatus(data.status || "Green");
 
       } catch (err) {
         console.error(err);
@@ -786,9 +790,9 @@ export default function IntersectionPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${intersection.status === "Red" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : intersection.status === "Yellow" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`} />
-            <span className={`text-xs font-bold uppercase tracking-wider ${intersection.status === "Red" ? "text-red-600 dark:text-red-400" : intersection.status === "Yellow" ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}`}>
-              {intersection.status === "Red" ? "Critical" : intersection.status === "Yellow" ? "Moderate" : "Normal"}
+            <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${liveStatus === "Red" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : liveStatus === "Yellow" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`} />
+            <span className={`text-xs font-bold uppercase tracking-wider ${liveStatus === "Red" ? "text-red-600 dark:text-red-400" : liveStatus === "Yellow" ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}`}>
+              {liveStatus === "Red" ? "Critical" : liveStatus === "Yellow" ? "Moderate" : "Normal"}
             </span>
           </div>
         </div>

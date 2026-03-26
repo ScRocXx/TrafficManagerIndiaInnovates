@@ -113,8 +113,8 @@ export default function Home() {
         return <HardwareVulnerabilityView setActiveTab={handleTabChange} />;
       case "Delhi Map":
       default:
-        const currentStatus = liveData ? liveData.status : (selectedIntersection?.status || "Green");
-        const currentP = liveData ? liveData.p.toFixed(2) : (selectedIntersection?.p.toFixed(2) || "0.00");
+        const currentStatus = liveData ? liveData.status : "Green";
+        const currentP = liveData ? liveData.p.toFixed(2) : "0.00";
         
         return (
           <>

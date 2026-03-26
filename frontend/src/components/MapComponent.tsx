@@ -14,7 +14,7 @@ const STATUS_COLORS: Record<string, { hex: string; label: string }> = {
   Green: { hex: "#12aa1eff", label: "NOM" },
 };
 
-function createTelemetryIcon(item: IntersectionData) {
+function createTelemetryIcon(item: IntersectionData & { status: string; p: number }) {
   const { hex } = STATUS_COLORS[item.status] || STATUS_COLORS.Green;
   const shortName = item.name.length > 10 ? item.name.substring(0, 9) + "…" : item.name;
 
@@ -78,8 +78,8 @@ function TelemetryMarkers({ onSelectIntersection, isDark }: { onSelectIntersecti
     intersections.forEach((item) => {
       // Merge live status if available
       const live = liveStatus[item.nodeId];
-      const currentStatus = live?.status || item.status;
-      const currentP = live ? live.congestionLevel : item.p;
+      const currentStatus = live?.status || "Green";
+      const currentP = live ? live.congestionLevel : 0;
       const enrichedItem = { ...item, status: currentStatus, p: currentP };
 
       const { hex } = STATUS_COLORS[currentStatus] || STATUS_COLORS.Green;
