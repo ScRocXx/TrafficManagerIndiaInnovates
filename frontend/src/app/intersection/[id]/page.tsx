@@ -782,7 +782,7 @@ export default function IntersectionPage() {
             </button>
             <div>
               <h1 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{intersection.name}</h1>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">Intersection-I ({intersection.nodeId}) · Command Center</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">Node NB-{intersection.nodeId} · Command Center</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
