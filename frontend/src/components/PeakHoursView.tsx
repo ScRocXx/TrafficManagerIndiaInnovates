@@ -167,7 +167,8 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
   useEffect(() => {
     const fetchTraffic = async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/traffic");
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+        const res = await fetch(`${API_URL}/api/traffic`);
         if (res.ok) {
           const liveData = await res.json();
           setData(prev => prev.map(node => {

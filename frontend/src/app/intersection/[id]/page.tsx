@@ -467,37 +467,37 @@ export default function IntersectionPage() {
 
   // Lane states
   const [laneStates, setLaneStates] = useState<Record<string, "RED" | "YEL" | "GRN">>({
-    North: "GRN", South: "RED", East: "RED", West: "RED",
+    "01": "GRN", "02": "RED", "03": "RED", "04": "RED",
   });
   
   const [laneGreenTimers, setLaneGreenTimers] = useState<Record<string, number>>({
-    North: 45, South: 0, East: 0, West: 0
+    "01": 45, "02": 0, "03": 0, "04": 0
   });
   const [laneWaitTimers, setLaneWaitTimers] = useState<Record<string, number>>({
-    North: 0, South: 32, East: 48, West: 20
+    "01": 0, "02": 32, "03": 48, "04": 20
   });
   const [laneDensities, setLaneDensities] = useState<Record<string, string>>({
-    North: "72%", South: "58%", East: "85%", West: "41%"
+    "01": "0%", "02": "0%", "03": "0%", "04": "0%"
   });
   const [evpCount, setEvpCount] = useState<number>(0);
 
   // Timers and Overrides
   const [laneActive, setLaneActive] = useState<Record<string, boolean>>({
-    North: false, South: false, East: false, West: false,
+    "01": false, "02": false, "03": false, "04": false,
   });
   const [laneTimers, setLaneTimers] = useState<Record<string, number>>({
-    North: 0, South: 0, East: 0, West: 0,
+    "01": 0, "02": 0, "03": 0, "04": 0,
   });
   const [unlockedLanes, setUnlockedLanes] = useState<Record<string, boolean>>({
-    North: false, South: false, East: false, West: false,
+    "01": false, "02": false, "03": false, "04": false,
   });
   const [pinOpenLane, setPinOpenLane] = useState<string | null>(null);
   const [confirmChangeLane, setConfirmChangeLane] = useState<string | null>(null);
 
   // Audit log
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([
-    { time: "09:12", dir: "North", state: "GRN", reason: "Morning clearance", officer: "Officer #214" },
-    { time: "08:55", dir: "South", state: "RED", reason: "Accident reported", officer: "Officer #214" },
+    { time: "09:12", dir: "01", state: "GRN", reason: "Morning clearance", officer: "Officer #214" },
+    { time: "08:55", dir: "02", state: "RED", reason: "Accident reported", officer: "Officer #214" },
   ]);
 
   // Code Red
@@ -517,22 +517,21 @@ export default function IntersectionPage() {
     setAuditLog((prev) => [{ time, dir, state, reason, officer: "Officer #214" }, ...prev]);
   }, []);
 
-  const LANE_MAP: Record<string, string> = { "01": "North", "02": "South", "03": "East", "04": "West", "A": "North", "B": "South", "C": "East", "D": "West" };
-
   useEffect(() => {
     if (!intersection?.nodeId) return;
     
     const fetchTraffic = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/traffic/${intersection.nodeId}`);
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+        const res = await fetch(`${API_URL}/api/traffic/${intersection.nodeId}`);
         if (!res.ok) return;
         const data = await res.json();
         
-        let newLaneStates: Record<string, "RED" | "YEL" | "GRN"> = { North: "RED", South: "RED", East: "RED", West: "RED" };
+        let newLaneStates: Record<string, "RED" | "YEL" | "GRN"> = { "01": "RED", "02": "RED", "03": "RED", "04": "RED" };
         const activePhaseFull = data.state_snapshot?.active_phase;
         if (activePhaseFull) {
           const suffix = activePhaseFull.split("-").pop() || "";
-          const mappedDir = LANE_MAP[suffix] || "North";
+          const mappedDir = suffix || "01";
           
           let engineState = data.state_snapshot?.engine_state || "BASE_GREEN";
           if (engineState.includes("YELLOW") || engineState.includes("YEL")) {
@@ -550,7 +549,7 @@ export default function IntersectionPage() {
           for (const key in data.lane_metrics) {
             const laneObj = data.lane_metrics[key];
             const suffix = key.split("-").pop() || "";
-            const dir = LANE_MAP[suffix];
+            const dir = suffix;
             if (dir) {
               const q = laneObj.queue_N || 0;
               newDensities[dir] = `${Math.min(100, Math.round((q / 120) * 100))}%`;
@@ -657,7 +656,8 @@ export default function IntersectionPage() {
     }
 
     // Send Jetson API Call
-    fetch("http://localhost:8000/api/override", {
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+    fetch(`${API_URL}/api/override`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ nodeId: intersection?.nodeId || "unknown", lane: dir, state: next, reason })
@@ -691,7 +691,8 @@ export default function IntersectionPage() {
     }
 
     // Send Jetson API Call
-    fetch("http://localhost:8000/api/override", {
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+    fetch(`${API_URL}/api/override`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ nodeId: intersection?.nodeId || "unknown", lane: dir, state: targetState, reason: "Manual Quick Switch" })
@@ -771,12 +772,12 @@ export default function IntersectionPage() {
             <section>
               <p className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-widest font-semibold mb-3">Lane Cameras — Live CCTV</p>
               <div className="grid grid-cols-2 gap-3">
-                {["North", "South", "East", "West"].map((dir, idx) => {
+                {["01", "02", "03", "04"].map((dir, idx) => {
                   const current = codeRed ? "RED" : laneStates[dir];
                   const waitVal = current === "RED" ? `${laneWaitTimers[dir]}s` : "0s";
                   const greenVal = current === "GRN" ? `${laneGreenTimers[dir]}s` : "—";
-                  const density = dir === "North" ? "72%" : dir === "South" ? "58%" : dir === "East" ? "85%" : "41%";
-                  const lane = { direction: dir, density, waitTime: waitVal, greenTime: greenVal, signal: current as "RED" | "YEL" | "GRN" };
+                  const density = laneDensities[dir] || "0%";
+                  const lane = { direction: `Camera ${dir}`, density, waitTime: waitVal, greenTime: greenVal, signal: current as "RED" | "YEL" | "GRN" };
                   
                   // Fallback IDs if they want 4 different angles
                   const vidId = intersection.videoId || "1EiC9bvVGnk";
@@ -834,7 +835,7 @@ export default function IntersectionPage() {
 
                 {/* Lane Rows */}
                 <div className="p-4 space-y-2">
-                  {["North", "South", "East", "West"].map((dir) => {
+                  {["01", "02", "03", "04"].map((dir) => {
                     const current = laneStates[dir];
                     const isUnlocked = unlockedLanes[dir];
                     const isPinOpen = pinOpenLane === dir;
