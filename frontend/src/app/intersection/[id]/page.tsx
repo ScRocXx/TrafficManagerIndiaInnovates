@@ -595,7 +595,19 @@ export default function IntersectionPage() {
         }
         return n;
       });
-      // WaitTimer ticking is now controlled purely via Jetson API hardware heartbeat source
+
+      // Wait timers: tick up for RED lanes (cars are waiting longer), reset for GREEN
+      setLaneWaitTimers(prev => {
+        const n: Record<string, number> = { ...prev };
+        for (const dir in laneStates) {
+          if (laneStates[dir] === "RED" && (n[dir] || 0) > 0) {
+            n[dir]++;  // Cars on red are waiting longer each second
+          } else if (laneStates[dir] === "GRN") {
+            n[dir] = 0; // Green = no wait
+          }
+        }
+        return n;
+      });
     }, 1000);
     return () => clearInterval(tick);
   }, [laneActive, codeRed, laneStates]);
