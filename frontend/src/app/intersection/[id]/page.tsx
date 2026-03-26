@@ -546,6 +546,7 @@ export default function IntersectionPage() {
           if (engineState.includes("YELLOW") || engineState.includes("YEL")) {
              newLaneStates[mappedDir] = "YEL";
           } else {
+             newLaneStates[mappedDir] = "GRN";
              const gt = data.state_snapshot?.green_timer;
              if (typeof gt === "number") {
                setLaneGreenTimers(prev => {
