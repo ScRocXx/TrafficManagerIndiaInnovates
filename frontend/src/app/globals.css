@@ -104,3 +104,8 @@ body {
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
 }
+
+/* Soft dark mode filter for map tiles — mimics Stadia alidade_smooth_dark */
+.dark-map-tiles {
+  filter: brightness(0.7) invert(1) contrast(1.1) hue-rotate(200deg) saturate(0.3) brightness(0.8);
+}

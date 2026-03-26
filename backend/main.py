@@ -18,10 +18,10 @@ models.database.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="India Innovate Traffic Backend")
 
-# Allow Next.js (port 3000) to communicate with this backend
+# Allow all origins so Vercel and any frontend can reach the API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000","http://127.0.0.1:8000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -225,8 +225,14 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
     """Returns the raw detailed metric payload for a specific intersection"""
     record = db.query(models.TrafficMetricsRecord).filter(models.TrafficMetricsRecord.node_id == node_id).order_by(models.TrafficMetricsRecord.timestamp.desc()).first()
     if not record:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Node not found")
+        # Return empty skeleton so the frontend doesn't break while waiting for first MQTT packet
+        return {
+            "nodeId": node_id,
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "state_snapshot": {"active_phase": f"{node_id}-01", "engine_state": "AWAITING_DATA", "box_gridlock_pct": 0.0},
+            "lane_metrics": {},
+            "critical_events": {"evp_overrides": 0, "gridlock_triggers": 0}
+        }
     
     return {
         "nodeId": record.node_id,
