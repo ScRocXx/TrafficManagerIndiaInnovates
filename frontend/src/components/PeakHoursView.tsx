@@ -61,19 +61,36 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
         const res = await fetch(`${API_URL}/api/traffic`);
         if (res.ok) {
           const liveData = await res.json();
-          setData(prev => prev.map(node => {
-            const live = liveData.find((l: any) => l.nodeId === node.id);
-            if (live) {
-              return {
-                ...node,
-                status: live.status as "Red" | "Yellow" | "Green",
-                avgPValue: live.congestionLevel,
-                peakVolume: live.vehiclesPassed > 0 ? live.vehiclesPassed : node.peakVolume,
-                maxCongestionHrs: live.congestionLevel > 0.6 ? +(live.congestionLevel * 6).toFixed(1) : node.maxCongestionHrs,
-              };
-            }
-            return node;
-          }));
+          const newData: IntersectionPeakData[] = intersections.map(node => {
+            const live = liveData.find((l: any) => l.nodeId === node.nodeId);
+            const seed = parseInt(node.nodeId.slice(-3)) || 100;
+            const baseVol = 500 + seed * 5;
+            
+            const hourlyMock = [
+              { hour: "6AM", vehicles: Math.floor(baseVol) }, 
+              { hour: "8AM", vehicles: Math.floor(baseVol * 3) }, 
+              { hour: "10AM", vehicles: Math.floor(baseVol * 2) },
+              { hour: "12PM", vehicles: Math.floor(baseVol * 2.2) }, 
+              { hour: "2PM", vehicles: Math.floor(baseVol * 1.9) }, 
+              { hour: "4PM", vehicles: Math.floor(baseVol * 3.5) },
+              { hour: "6PM", vehicles: live ? Math.floor(live.vehiclesPassed * 5) : Math.floor(baseVol * 4.5) }, 
+              { hour: "8PM", vehicles: Math.floor(baseVol * 2.5) }, 
+              { hour: "10PM", vehicles: Math.floor(baseVol * 0.8) },
+            ];
+
+            return {
+              id: node.nodeId,
+              name: node.name,
+              status: (live?.status as "Red" | "Yellow" | "Green") || "Green",
+              peakHour: "6:00 PM",
+              peakVolume: live ? Math.floor(Math.max(live.vehiclesPassed * 5, baseVol * 4)) : Math.floor(baseVol * 4),
+              avgPValue: live?.congestionLevel || 0,
+              maxCongestionHrs: (live?.congestionLevel || 0) > 0.6 ? +((live?.congestionLevel || 0) * 6).toFixed(1) : 1.5,
+              clearanceWindow: "10 PM – 5 AM",
+              hourlyData: hourlyMock
+            };
+          });
+          setData(newData);
         }
       } catch (e) {
         console.error("Traffic backend offline", e);
