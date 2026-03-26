@@ -504,8 +504,8 @@ export default function IntersectionPage() {
   const [codeRed, setCodeRed] = useState(false);
   const [codeRedTimer, setCodeRedTimer] = useState<number>(0);
 
-  const id = Number(params?.id);
-  const intersection = intersections.find((i) => i.id === id);
+  const id = params?.id as string;
+  const intersection = intersections.find((i) => i.nodeId === id || i.id === Number(id));
 
   const showToast = useCallback((message: string, type: "success" | "error" | "warning") => {
     setToast({ message, type });
@@ -619,7 +619,7 @@ export default function IntersectionPage() {
 
   const handleSearchSelect = (name: string) => {
     const match = intersections.find((i) => i.name.toLowerCase() === name.toLowerCase());
-    if (match) router.push(`/intersection/${match.id}`);
+    if (match) router.push(`/intersection/${match.nodeId}`);
   };
 
   /* ── Lane PIN unlock ── */

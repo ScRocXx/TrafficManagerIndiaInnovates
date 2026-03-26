@@ -95,7 +95,7 @@ function TelemetryMarkers({ onSelectIntersection, isDark }: { onSelectIntersecti
         if (btn) {
           btn.onclick = () => {
             marker.closePopup();
-            window.location.href = `/intersection/${item.id}`;
+            window.location.href = `/intersection/${item.nodeId}`;
           };
         }
       });
