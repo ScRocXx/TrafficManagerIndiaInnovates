@@ -118,7 +118,7 @@ export default function MostBusiestView({ setActiveTab }: { setActiveTab?: (tab:
                       {(() => {
                         const match = intersections.find(i => i.name === item.name);
                         return match ? (
-                          <Link href={`/intersection/${match.id}`} className="text-sm font-medium text-sky-500 dark:text-sky-400 hover:underline cursor-pointer transition-colors">
+                          <Link href={`/intersection/${match.nodeId}`} className="text-sm font-medium text-sky-500 dark:text-sky-400 hover:underline cursor-pointer transition-colors">
                             View
                           </Link>
                         ) : (
