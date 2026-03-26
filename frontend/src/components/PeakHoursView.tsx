@@ -35,7 +35,7 @@ interface IntersectionPeakData {
 
 const intersectionData: IntersectionPeakData[] = [
   {
-    id: "INT-01", name: "ITO Junction", status: "Red", peakHour: "6:15 PM",
+    id: "284501", name: "ITO Junction", status: "Red", peakHour: "6:15 PM",
     peakVolume: 14200, avgPValue: 0.85, maxCongestionHrs: 4.2, clearanceWindow: "11 PM – 5 AM",
     hourlyData: [
       { hour: "6AM", vehicles: 1800 }, { hour: "8AM", vehicles: 6200 }, { hour: "10AM", vehicles: 4100 },
@@ -44,7 +44,7 @@ const intersectionData: IntersectionPeakData[] = [
     ]
   },
   {
-    id: "INT-02", name: "AIIMS", status: "Red", peakHour: "6:30 PM",
+    id: "284502", name: "AIIMS", status: "Red", peakHour: "6:30 PM",
     peakVolume: 12800, avgPValue: 0.92, maxCongestionHrs: 3.8, clearanceWindow: "11 PM – 5 AM",
     hourlyData: [
       { hour: "6AM", vehicles: 1500 }, { hour: "8AM", vehicles: 5800 }, { hour: "10AM", vehicles: 3900 },
@@ -53,7 +53,7 @@ const intersectionData: IntersectionPeakData[] = [
     ]
   },
   {
-    id: "INT-03", name: "Ashram Chowk", status: "Red", peakHour: "5:45 PM",
+    id: "284507", name: "Ashram Chowk", status: "Red", peakHour: "5:45 PM",
     peakVolume: 13500, avgPValue: 0.88, maxCongestionHrs: 4.0, clearanceWindow: "10:30 PM – 5:30 AM",
     hourlyData: [
       { hour: "6AM", vehicles: 2100 }, { hour: "8AM", vehicles: 6800 }, { hour: "10AM", vehicles: 4500 },
@@ -62,7 +62,7 @@ const intersectionData: IntersectionPeakData[] = [
     ]
   },
   {
-    id: "INT-04", name: "Connaught Place", status: "Yellow", peakHour: "1:00 PM",
+    id: "284503", name: "Connaught Place", status: "Yellow", peakHour: "1:00 PM",
     peakVolume: 9100, avgPValue: 0.60, maxCongestionHrs: 2.5, clearanceWindow: "9 PM – 6 AM",
     hourlyData: [
       { hour: "6AM", vehicles: 900 }, { hour: "8AM", vehicles: 3200 }, { hour: "10AM", vehicles: 5100 },
@@ -71,7 +71,7 @@ const intersectionData: IntersectionPeakData[] = [
     ]
   },
   {
-    id: "INT-05", name: "South Ext", status: "Red", peakHour: "6:00 PM",
+    id: "284504", name: "South Ext", status: "Red", peakHour: "6:00 PM",
     peakVolume: 10500, avgPValue: 0.75, maxCongestionHrs: 3.2, clearanceWindow: "10 PM – 5 AM",
     hourlyData: [
       { hour: "6AM", vehicles: 1200 }, { hour: "8AM", vehicles: 4500 }, { hour: "10AM", vehicles: 3600 },
@@ -80,7 +80,7 @@ const intersectionData: IntersectionPeakData[] = [
     ]
   },
   {
-    id: "INT-06", name: "Kashmere Gate", status: "Yellow", peakHour: "9:00 AM",
+    id: "284506", name: "Kashmere Gate", status: "Yellow", peakHour: "9:00 AM",
     peakVolume: 8700, avgPValue: 0.55, maxCongestionHrs: 2.1, clearanceWindow: "8 PM – 6 AM",
     hourlyData: [
       { hour: "6AM", vehicles: 2800 }, { hour: "8AM", vehicles: 7200 }, { hour: "10AM", vehicles: 8700 },
@@ -89,7 +89,7 @@ const intersectionData: IntersectionPeakData[] = [
     ]
   },
   {
-    id: "INT-07", name: "Raja Garden", status: "Red", peakHour: "5:30 PM",
+    id: "284511", name: "Raja Garden", status: "Red", peakHour: "5:30 PM",
     peakVolume: 11900, avgPValue: 0.78, maxCongestionHrs: 3.5, clearanceWindow: "10 PM – 5:30 AM",
     hourlyData: [
       { hour: "6AM", vehicles: 1600 }, { hour: "8AM", vehicles: 5200 }, { hour: "10AM", vehicles: 4000 },
@@ -98,7 +98,7 @@ const intersectionData: IntersectionPeakData[] = [
     ]
   },
   {
-    id: "INT-08", name: "Karol Bagh", status: "Yellow", peakHour: "7:00 PM",
+    id: "284509", name: "Karol Bagh", status: "Yellow", peakHour: "7:00 PM",
     peakVolume: 7200, avgPValue: 0.45, maxCongestionHrs: 1.8, clearanceWindow: "9 PM – 6:30 AM",
     hourlyData: [
       { hour: "6AM", vehicles: 800 }, { hour: "8AM", vehicles: 2800 }, { hour: "10AM", vehicles: 3200 },
@@ -107,7 +107,7 @@ const intersectionData: IntersectionPeakData[] = [
     ]
   },
   {
-    id: "INT-09", name: "Dhaula Kuan", status: "Green", peakHour: "5:00 PM",
+    id: "284505", name: "Dhaula Kuan", status: "Green", peakHour: "5:00 PM",
     peakVolume: 5200, avgPValue: 0.25, maxCongestionHrs: 1.0, clearanceWindow: "8 PM – 7 AM",
     hourlyData: [
       { hour: "6AM", vehicles: 600 }, { hour: "8AM", vehicles: 2200 }, { hour: "10AM", vehicles: 2800 },
@@ -116,7 +116,7 @@ const intersectionData: IntersectionPeakData[] = [
     ]
   },
   {
-    id: "INT-10", name: "Laxmi Nagar", status: "Green", peakHour: "8:30 AM",
+    id: "284508", name: "Laxmi Nagar", status: "Green", peakHour: "8:30 AM",
     peakVolume: 5800, avgPValue: 0.30, maxCongestionHrs: 1.2, clearanceWindow: "8 PM – 7 AM",
     hourlyData: [
       { hour: "6AM", vehicles: 1200 }, { hour: "8AM", vehicles: 5800 }, { hour: "10AM", vehicles: 3400 },
@@ -125,7 +125,7 @@ const intersectionData: IntersectionPeakData[] = [
     ]
   },
   {
-    id: "INT-11", name: "Moolchand", status: "Green", peakHour: "6:45 PM",
+    id: "284510", name: "Moolchand", status: "Green", peakHour: "6:45 PM",
     peakVolume: 4100, avgPValue: 0.20, maxCongestionHrs: 0.8, clearanceWindow: "7 PM – 7 AM",
     hourlyData: [
       { hour: "6AM", vehicles: 500 }, { hour: "8AM", vehicles: 1800 }, { hour: "10AM", vehicles: 2200 },
@@ -134,7 +134,7 @@ const intersectionData: IntersectionPeakData[] = [
     ]
   },
   {
-    id: "INT-12", name: "Akshardham", status: "Green", peakHour: "9:15 AM",
+    id: "284512", name: "Akshardham", status: "Green", peakHour: "9:15 AM",
     peakVolume: 3600, avgPValue: 0.15, maxCongestionHrs: 0.5, clearanceWindow: "7 PM – 7 AM",
     hourlyData: [
       { hour: "6AM", vehicles: 800 }, { hour: "8AM", vehicles: 3200 }, { hour: "10AM", vehicles: 3600 },
@@ -174,7 +174,13 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
           setData(prev => prev.map(node => {
             const live = liveData.find((l: any) => l.nodeId === node.id);
             if (live) {
-              return { ...node, status: live.status, avgPValue: live.congestionLevel };
+              return {
+                ...node,
+                status: live.status as "Red" | "Yellow" | "Green",
+                avgPValue: live.congestionLevel,
+                peakVolume: live.vehiclesPassed > 0 ? live.vehiclesPassed : node.peakVolume,
+                maxCongestionHrs: live.congestionLevel > 0.6 ? +(live.congestionLevel * 6).toFixed(1) : node.maxCongestionHrs,
+              };
             }
             return node;
           }));

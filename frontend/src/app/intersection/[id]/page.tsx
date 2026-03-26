@@ -517,6 +517,8 @@ export default function IntersectionPage() {
     setAuditLog((prev) => [{ time, dir, state, reason, officer: "Officer #214" }, ...prev]);
   }, []);
 
+  const prevPhaseRef = useRef<string>("");
+
   useEffect(() => {
     if (!intersection?.nodeId) return;
     
@@ -529,6 +531,10 @@ export default function IntersectionPage() {
         
         let newLaneStates: Record<string, "RED" | "YEL" | "GRN"> = { "01": "RED", "02": "RED", "03": "RED", "04": "RED" };
         const activePhaseFull = data.state_snapshot?.active_phase;
+        const currentPhase = activePhaseFull || "";
+        const phaseChanged = currentPhase !== prevPhaseRef.current;
+        prevPhaseRef.current = currentPhase;
+
         if (activePhaseFull) {
           const suffix = activePhaseFull.split("-").pop() || "";
           const mappedDir = suffix || "01";
@@ -545,7 +551,6 @@ export default function IntersectionPage() {
         
         if (data.lane_metrics) {
           let newDensities = { ...laneDensities };
-          let newWait = { ...laneWaitTimers };
           for (const key in data.lane_metrics) {
             const laneObj = data.lane_metrics[key];
             const suffix = key.split("-").pop() || "";
@@ -553,11 +558,23 @@ export default function IntersectionPage() {
             if (dir) {
               const q = laneObj.queue_N || 0;
               newDensities[dir] = `${Math.min(100, Math.round((q / 120) * 100))}%`;
-              newWait[dir] = laneObj.wait_time_T || 0;
             }
           }
           setLaneDensities(newDensities);
-          setLaneWaitTimers(newWait);
+
+          // Only reset wait timers when the active phase changes (signal transition)
+          // Otherwise let the local countdown run freely
+          if (phaseChanged) {
+            let newWait: Record<string, number> = {};
+            for (const key in data.lane_metrics) {
+              const laneObj = data.lane_metrics[key];
+              const suffix = key.split("-").pop() || "";
+              if (suffix) {
+                newWait[suffix] = laneObj.wait_time_T || 0;
+              }
+            }
+            setLaneWaitTimers(newWait);
+          }
         }
         
         setEvpCount(data.critical_events?.evp_overrides || 0);
@@ -596,12 +613,12 @@ export default function IntersectionPage() {
         return n;
       });
 
-      // Wait timers: tick up for RED lanes (cars are waiting longer), reset for GREEN
+      // Wait timers: tick DOWN for RED lanes (approaching signal change), reset for GREEN
       setLaneWaitTimers(prev => {
         const n: Record<string, number> = { ...prev };
         for (const dir in laneStates) {
           if (laneStates[dir] === "RED" && (n[dir] || 0) > 0) {
-            n[dir]++;  // Cars on red are waiting longer each second
+            n[dir]--;  // Counting down toward green
           } else if (laneStates[dir] === "GRN") {
             n[dir] = 0; // Green = no wait
           }
