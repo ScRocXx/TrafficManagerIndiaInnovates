@@ -4,6 +4,10 @@ from pydantic import BaseModel
 from typing import List
 import datetime
 from sqlalchemy.orm import Session
+import json
+import threading
+import uuid
+import paho.mqtt.client as mqtt
 
 # Database imports
 import database
@@ -22,6 +26,56 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- MQTT BACKGROUND WORKER ---
+MQTT_BROKER = "broker.hivemq.com"
+MQTT_PORT = 1883
+MQTT_TOPIC = "mcd/traffic/#"
+
+def on_mqtt_connect(client, userdata, flags, reason_code, properties):
+    print(f"[{datetime.datetime.utcnow().isoformat()}] Connected to HiveMQ Broker! Listening on {MQTT_TOPIC}")
+    client.subscribe(MQTT_TOPIC)
+
+def on_mqtt_message(client, userdata, msg):
+    try:
+        payload_str = msg.payload.decode("utf-8")
+        raw_data = json.loads(payload_str)
+        
+        node_id = raw_data.get("nodeId")
+        if not node_id:
+            return
+            
+        db = database.SessionLocal()
+        db_metrics = models.TrafficMetricsRecord(
+            node_id=node_id,
+            timestamp=raw_data.get("timestamp", datetime.datetime.utcnow().isoformat()),
+            state_snapshot=raw_data.get("state_snapshot", {}),
+            lane_metrics=raw_data.get("lane_metrics", {}),
+            critical_events_this_minute=raw_data.get("critical_events_this_minute", {})
+        )
+        db.add(db_metrics)
+        db.commit()
+        db.close()
+        print(f"[{datetime.datetime.utcnow().isoformat()}] MQTT INGEST SUCCESS: Node {node_id}")
+    except Exception as e:
+        pass # Ignore malformed packets quietly
+
+def start_mqtt_client():
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, "india-innovate-backend-" + str(uuid.uuid4()))
+    client.on_connect = on_mqtt_connect
+    client.on_message = on_mqtt_message
+    
+    try:
+        client.connect(MQTT_BROKER, MQTT_PORT, 60)
+        client.loop_forever()
+    except Exception as e:
+        print(f"MQTT Connection Failed: {e}")
+
+@app.on_event("startup")
+def startup_event():
+    # Run MQTT entirely in the background outside of FastAPI event loop
+    mqtt_thread = threading.Thread(target=start_mqtt_client, daemon=True)
+    mqtt_thread.start()
 
 # --- Pydantic Data Models (Input Validation) ---
 class DeviceHealth(BaseModel):
