@@ -161,7 +161,31 @@ function CustomTooltip({ active, payload, label, isDark }: any) {
 export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: string) => void }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDark, setIsDark] = useState(false);
+  const [data, setData] = useState<IntersectionPeakData[]>(intersectionData);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    const fetchTraffic = async () => {
+      try {
+        const res = await fetch("http://localhost:8000/api/traffic");
+        if (res.ok) {
+          const liveData = await res.json();
+          setData(prev => prev.map(node => {
+            const live = liveData.find((l: any) => l.nodeId === node.id);
+            if (live) {
+              return { ...node, status: live.status, avgPValue: live.congestionLevel };
+            }
+            return node;
+          }));
+        }
+      } catch (e) {
+        console.error("Traffic backend offline", e);
+      }
+    };
+    fetchTraffic();
+    const interval = setInterval(fetchTraffic, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     // Check initial dark mode state
@@ -194,11 +218,11 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
     }
   };
 
-  const filtered = intersectionData.filter(i =>
+  const filtered = data.filter(i =>
     i.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const sidebarFiltered = intersectionData.filter(i =>
+  const sidebarFiltered = data.filter(i =>
     i.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -381,15 +405,15 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
         <div className="p-4 border-t border-gray-200 dark:border-slate-800 space-y-2">
           <div className="flex justify-between text-[11px]">
             <span className="text-gray-500 dark:text-slate-500">Critical Nodes</span>
-            <span className="text-sky-600 dark:text-red-400 font-bold font-mono">{intersectionData.filter(i => i.status === 'Red').length}</span>
+            <span className="text-sky-600 dark:text-red-400 font-bold font-mono">{data.filter(i => i.status === 'Red').length}</span>
           </div>
           <div className="flex justify-between text-[11px]">
             <span className="text-gray-500 dark:text-slate-500">Moderate</span>
-            <span className="text-amber-500 dark:text-amber-400 font-bold font-mono">{intersectionData.filter(i => i.status === 'Yellow').length}</span>
+            <span className="text-amber-500 dark:text-amber-400 font-bold font-mono">{data.filter(i => i.status === 'Yellow').length}</span>
           </div>
           <div className="flex justify-between text-[11px]">
             <span className="text-gray-500 dark:text-slate-500">Normal Flow</span>
-            <span className="text-gray-400 dark:text-slate-400 font-bold font-mono">{intersectionData.filter(i => i.status === 'Green').length}</span>
+            <span className="text-gray-400 dark:text-slate-400 font-bold font-mono">{data.filter(i => i.status === 'Green').length}</span>
           </div>
         </div>
       </div>

@@ -2,31 +2,7 @@
 import React, { useState } from "react";
 import { Search, Bell, UserCircle, AlertCircle, Camera, Navigation, Clock, LogOut, Settings, BarChart3, Shield } from "lucide-react";
 import { vulnerabilitiesData } from '../app/page';
-
-const mockIntersections = [
-  'ITO Junction',
-  'AIIMS Intersection',
-  'Connaught Place',
-  'South Ext',
-  'Rajiv Chowk',
-  'Karol Bagh',
-  'Lajpat Nagar',
-  'Dwarka',
-  'Rohini',
-  'Vasant Kunj',
-  'Saket',
-  'Nehru Place',
-  'Hauz Khas',
-  'Chandni Chowk',
-  'Dhaula Kuan',
-  'Kashmere Gate',
-  'Laxmi Nagar',
-  'Pitampura',
-  'Janakpuri',
-  'Okhla',
-  'Vasant Vihar',
-  'Greater Kailash'
-];
+import { intersections } from '@/lib/intersections';
 
 export function SearchBar({ onSelect, className = "absolute top-6 left-1/2 -translate-x-1/2 z-[1000] w-[400px]" }: { onSelect?: (name: string) => void, className?: string }) {
   const [isFocused, setIsFocused] = useState(false);
@@ -34,9 +10,12 @@ export function SearchBar({ onSelect, className = "absolute top-6 left-1/2 -tran
 
   const normalizedSearchTerm = searchTerm.toLowerCase()
     .replace(/rajeev/g, 'rajiv')
-    .replace(/chawk/g, 'chowk');
+    .replace(/chawk/g, 'chowk')
+    .replace(/\s+/g, '');
 
-  const filtered = mockIntersections.filter(i => i.toLowerCase().includes(normalizedSearchTerm));
+  const filtered = intersections
+    .map(i => i.name)
+    .filter(name => name.toLowerCase().replace(/\s+/g, '').includes(normalizedSearchTerm));
 
   const handleSelect = (name: string) => {
     setSearchTerm("");

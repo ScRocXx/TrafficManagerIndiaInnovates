@@ -24,12 +24,7 @@ interface LaneData {
   greenTime: string;
 }
 
-const LANE_DATA: LaneData[] = [
-  { direction: "North", signal: "GREEN", density: "72%", waitTime: "0s", greenTime: "45s" },
-  { direction: "South", signal: "RED", density: "58%", waitTime: "32s", greenTime: "—" },
-  { direction: "East", signal: "RED", density: "85%", waitTime: "48s", greenTime: "—" },
-  { direction: "West", signal: "GREEN", density: "41%", waitTime: "0s", greenTime: "38s" },
-];
+
 
 const LOCAL_CONTACTS = [
   { name: "Traffic Police – Division HQ", phone: "+91 11-2301-5100", role: "Traffic Control" },
@@ -50,26 +45,33 @@ interface AuditEntry {
 }
 
 /* ── Camera Feed Placeholder ── */
-function CameraFeed({ lane }: { lane: LaneData }) {
-  const isGreen = lane.signal === "GREEN";
+function CameraFeed({ lane, currentSignal, videoId }: { lane: LaneData; currentSignal: "RED" | "YEL" | "GRN"; videoId: string }) {
+  const isGreen = currentSignal === "GRN";
+  const isYellow = currentSignal === "YEL";
+  const signalLabel = currentSignal === "GRN" ? "GREEN" : currentSignal === "YEL" ? "YELLOW" : "RED";
+
   return (
     <div className="flex flex-col">
       <div
-        className={`relative aspect-video bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden transition-shadow duration-300 ${isGreen
+        className={`relative aspect-video bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden transition-shadow duration-300 group ${isGreen
           ? "ring-2 ring-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]"
+          : isYellow ? "ring-2 ring-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.4)]"
           : "ring-2 ring-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
           }`}
       >
-        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full animate-pulse ${isGreen ? "bg-green-500" : "bg-red-500"}`} />
-          <span className="text-[10px] text-white/80 font-mono uppercase tracking-wider">{lane.direction}</span>
+        <iframe
+          src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&disablekb=1&fs=0&modestbranding=1`}
+          className="absolute inset-0 w-full h-full scale-[1.3] pointer-events-none opacity-80 group-hover:opacity-100 transition-opacity"
+          allow="autoplay; encrypted-media"
+        />
+        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 z-10 bg-black/50 px-2 py-1 rounded backdrop-blur-sm">
+          <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isGreen ? "bg-green-500" : isYellow ? "bg-amber-400" : "bg-red-500"}`} />
+          <span className="text-[9px] text-white/90 font-mono uppercase tracking-wider">{lane.direction} CAM</span>
         </div>
-        <div className="absolute top-2.5 right-2.5">
-          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${isGreen ? "bg-green-500/20 text-green-400 border border-green-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"
-            }`}>{lane.signal}</span>
+        <div className="absolute top-2.5 right-2.5 z-10">
+          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${isGreen ? "bg-green-500/20 text-green-400 border border-green-500/30" : isYellow ? "bg-amber-500/20 text-amber-500 border border-amber-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"
+            }`}>{signalLabel}</span>
         </div>
-        <Video className="w-8 h-8 text-slate-700" />
-        <p className="absolute bottom-2.5 text-[10px] text-slate-500 font-mono">Feed connecting...</p>
       </div>
       <div className="grid grid-cols-3 gap-1.5 mt-2">
         {[
@@ -465,7 +467,14 @@ export default function IntersectionPage() {
 
   // Lane states
   const [laneStates, setLaneStates] = useState<Record<string, "RED" | "YEL" | "GRN">>({
-    North: "GRN", South: "RED", East: "RED", West: "GRN",
+    North: "GRN", South: "RED", East: "RED", West: "RED",
+  });
+  
+  const [laneGreenTimers, setLaneGreenTimers] = useState<Record<string, number>>({
+    North: 45, South: 0, East: 0, West: 0
+  });
+  const [laneWaitTimers, setLaneWaitTimers] = useState<Record<string, number>>({
+    North: 0, South: 32, East: 48, West: 20
   });
 
   // Timers and Overrides
@@ -517,9 +526,24 @@ export default function IntersectionPage() {
       if (codeRed) {
         setCodeRedTimer(p => p + 1);
       }
+      
+      setLaneGreenTimers(prev => {
+        const n = { ...prev };
+        for (const dir in laneStates) {
+          if (laneStates[dir] === "GRN" && n[dir] > 0) n[dir]--;
+        }
+        return n;
+      });
+      setLaneWaitTimers(prev => {
+        const n = { ...prev };
+        for (const dir in laneStates) {
+          if (laneStates[dir] === "RED") n[dir]++;
+        }
+        return n;
+      });
     }, 1000);
     return () => clearInterval(tick);
-  }, [laneActive, codeRed]);
+  }, [laneActive, codeRed, laneStates]);
 
   if (!intersection) {
     return (
@@ -558,11 +582,67 @@ export default function IntersectionPage() {
   const handleConfirmedChange = (dir: string, reason: string) => {
     const cur = laneStates[dir];
     const next: "RED" | "GRN" = cur === "GRN" ? "RED" : "GRN";
-    setLaneStates((p) => ({ ...p, [dir]: next }));
+    
+    setLaneStates((p) => {
+      const newState = { ...p };
+      if (next === "GRN") {
+        // Enforce only one green light at a time
+        Object.keys(newState).forEach(k => {
+          if (k !== dir) newState[k] = "RED";
+        });
+      }
+      newState[dir] = next;
+      return newState;
+    });
+
+    if (next === "GRN") {
+      setLaneGreenTimers(p => ({ ...p, [dir]: 45 }));
+      setLaneWaitTimers(p => ({ ...p, [dir]: 0 }));
+    }
+
+    // Send Jetson API Call
+    fetch("http://localhost:8000/api/override", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nodeId: intersection?.nodeId || "unknown", lane: dir, state: next, reason })
+    }).catch(e => console.error("Failed to signal Jetson", e));
+
     if (!laneActive[dir]) setLaneActive((p) => ({ ...p, [dir]: true }));
     setConfirmChangeLane(null);
     addAudit(dir, next, reason);
     showToast(`${dir} → ${next}`, "success");
+  };
+
+  /* ── Quick state switch (Unlocked Mode) ── */
+  const handleQuickSwitch = (dir: string, targetState: "RED" | "YEL" | "GRN") => {
+    if (laneStates[dir] === targetState) return;
+    
+    setLaneStates((p) => {
+      const newState = { ...p };
+      if (targetState === "GRN" || targetState === "YEL") {
+        // Ensure standard intersection safety (no concurrent greens in cross traffic)
+        Object.keys(newState).forEach(k => {
+          if (k !== dir) newState[k] = "RED"; 
+        });
+      }
+      newState[dir] = targetState;
+      return newState;
+    });
+
+    if (targetState === "GRN") {
+      setLaneGreenTimers(p => ({ ...p, [dir]: 45 }));
+      setLaneWaitTimers(p => ({ ...p, [dir]: 0 }));
+    }
+
+    // Send Jetson API Call
+    fetch("http://localhost:8000/api/override", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nodeId: intersection?.nodeId || "unknown", lane: dir, state: targetState, reason: "Manual Quick Switch" })
+    }).catch(e => console.error("Failed to signal Jetson", e));
+
+    addAudit(dir, targetState, "Manual quick switch (Unlocked)");
+    showToast(`${dir} manually set to ${targetState}`, "success");
   };
 
   /* ── Override toggle ── */
@@ -635,9 +715,19 @@ export default function IntersectionPage() {
             <section>
               <p className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-widest font-semibold mb-3">Lane Cameras — Live CCTV</p>
               <div className="grid grid-cols-2 gap-3">
-                {LANE_DATA.map((lane) => (
-                  <CameraFeed key={lane.direction} lane={lane} />
-                ))}
+                {["North", "South", "East", "West"].map((dir, idx) => {
+                  const current = codeRed ? "RED" : laneStates[dir];
+                  const waitVal = current === "RED" ? `${laneWaitTimers[dir]}s` : "0s";
+                  const greenVal = current === "GRN" ? `${laneGreenTimers[dir]}s` : "—";
+                  const density = dir === "North" ? "72%" : dir === "South" ? "58%" : dir === "East" ? "85%" : "41%";
+                  const lane = { direction: dir, density, waitTime: waitVal, greenTime: greenVal, signal: current as "RED" | "YEL" | "GRN" };
+                  
+                  // Fallback IDs if they want 4 different angles
+                  const vidId = intersection.videoId || "1EiC9bvVGnk";
+                  return (
+                    <CameraFeed key={lane.direction} lane={lane} currentSignal={laneStates[dir]} videoId={vidId} />
+                  );
+                })}
               </div>
             </section>
 
@@ -645,12 +735,16 @@ export default function IntersectionPage() {
             <section>
               <p className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-widest font-semibold mb-3">Center Box Camera & Emergency Compass</p>
               <div className="flex gap-4 items-start">
-                <div className="flex-1 relative aspect-[16/7] bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden ring-1 ring-gray-200 dark:ring-slate-700/50 shadow-sm">
-                  <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_6px_rgba(59,130,246,0.8)]" />
-                    <span className="text-[10px] text-white/80 font-mono uppercase tracking-wider">Center Box</span>
+                <div className="flex-1 relative aspect-[16/7] bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden shadow-sm group">
+                  <iframe
+                    src={`https://www.youtube.com/embed/${intersection.videoId || "1EiC9bvVGnk"}?autoplay=1&mute=1&loop=1&playlist=${intersection.videoId || "1EiC9bvVGnk"}&controls=0&disablekb=1&fs=0&modestbranding=1`}
+                    className="absolute inset-0 w-full h-full scale-[1.3] pointer-events-none opacity-80 group-hover:opacity-100 transition-opacity"
+                    allow="autoplay; encrypted-media"
+                  />
+                  <div className="absolute top-3 left-3 flex items-center gap-2 z-10 bg-black/60 px-3 py-1.5 rounded-lg backdrop-blur-sm border border-white/10">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_6px_rgba(239,68,68,0.8)]" />
+                    <span className="text-[10px] text-white/90 font-mono uppercase tracking-widest font-bold">Center PTZ Live</span>
                   </div>
-                  <Video className="w-8 h-8 text-slate-700" />
                 </div>
                 <div className="flex flex-col items-center gap-2.5">
                   <EmergencyCompass onAmbulanceClick={() => setShowAmbulanceModal(true)} />
@@ -793,9 +887,7 @@ export default function IntersectionPage() {
                               ] as const).map(([st, cls, ring]) => (
                                 <button
                                   key={st}
-                                  onClick={() => {
-                                    if (st !== current) setConfirmChangeLane(isConfirming ? null : dir);
-                                  }}
+                                  onClick={() => handleQuickSwitch(dir, st)}
                                   className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border ${current === st
                                     ? `${cls} border-transparent shadow ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-800 ${ring}`
                                     : "bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-600"

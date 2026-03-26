@@ -107,12 +107,17 @@ export default function Home() {
                   </button>
                 </div>
                 <div className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto">
-                  <div className="w-full aspect-video bg-gray-900 rounded-xl flex items-center justify-center relative overflow-hidden shadow-inner">
-                    <div className="absolute top-4 left-4 flex gap-2 items-center">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,1)]"></span>
-                      <span className="text-xs text-white uppercase tracking-wider font-semibold">Live Feed</span>
+                  <div className="w-full aspect-video bg-gray-900 rounded-xl flex items-center justify-center relative overflow-hidden shadow-inner group relative">
+                    {/* Simulated RTSP Live Traffic Feed using a 24/7 public intersection stream */}
+                    <iframe
+                      src={`https://www.youtube.com/embed/${selectedIntersection.videoId || "1EiC9bvVGnk"}?autoplay=1&mute=1&loop=1&playlist=${selectedIntersection.videoId || "1EiC9bvVGnk"}&controls=0&disablekb=1&fs=0&modestbranding=1`}
+                      className="absolute inset-0 w-full h-full scale-[1.3] pointer-events-none opacity-90 group-hover:opacity-100 transition-opacity"
+                      allow="autoplay; encrypted-media"
+                    />
+                    <div className="absolute top-4 left-4 flex gap-2 items-center z-10 bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/10">
+                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,1)]"></span>
+                      <span className="text-[10px] text-white uppercase tracking-wider font-bold">Live RTSP Feed</span>
                     </div>
-                    <p className="text-gray-500 font-mono text-sm">Camera connecting...</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
