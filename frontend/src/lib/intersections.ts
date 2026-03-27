@@ -21,12 +21,12 @@ const DEMO_VIDEOS = [
 // Configuration for the 5 custom videos at the main demo intersection
 export const DEMO_LANE_VIDEOS = {
   NODE_ID: "284501", // Make sure this matches your Jetson Simulator NODE_ID
-  CENTER: "1EiC9bvVGnk", // Replace with your Center Box PTZ YouTube ID
+  CENTER: "dhXpSnpjITM", // Center Box PTZ YouTube ID
   LANES: {
-    "01": "Nic5HvCd778", // Lane 1
-    "02": "gHEcS4stEIU", // Lane 2
-    "03": "iJZcjZD0fw0", // Lane 3
-    "04": "7LrWGGJFEJo"  // Lane 4
+    "01": "COZnsm1bKa4", // Lane 1 (Title: Lane 001)
+    "02": "B4TH_zNFApM", // Lane 2 (Title: NB traffic / Lane 2)
+    "03": "oMpfrrmG8KE", // Lane 3 (Title: nb_Lane 003)
+    "04": "y_H3TIFVRAo"  // Lane 4 (Title: Lane 004)
   }
 };
 
