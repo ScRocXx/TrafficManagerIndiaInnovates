@@ -46,7 +46,7 @@ interface AuditEntry {
 }
 
 /* ── Camera Feed Placeholder ── */
-function CameraFeed({ lane, currentSignal, videoId, streamActive }: { lane: LaneData; currentSignal: "RED" | "YEL" | "GRN"; videoId: string; streamActive: boolean }) {
+function CameraFeed({ lane, currentSignal, videoId, streamActive, isFallback = false }: { lane: LaneData; currentSignal: "RED" | "YEL" | "GRN"; videoId: string; streamActive: boolean; isFallback?: boolean }) {
   const isGreen = currentSignal === "GRN";
   const isYellow = currentSignal === "YEL";
   const signalLabel = currentSignal === "GRN" ? "GREEN" : currentSignal === "YEL" ? "YELLOW" : "RED";
@@ -62,10 +62,13 @@ function CameraFeed({ lane, currentSignal, videoId, streamActive }: { lane: Lane
   return (
     <div className="flex flex-col">
       <div
-        className={`relative aspect-video bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden transition-shadow duration-300 group ${isGreen
-          ? "ring-2 ring-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]"
-          : isYellow ? "ring-2 ring-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.4)]"
-          : "ring-2 ring-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
+        className={`relative aspect-video bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden transition-shadow duration-300 group ${
+          isFallback
+            ? "ring-2 ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.4)]"
+            : isGreen
+              ? "ring-2 ring-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]"
+              : isYellow ? "ring-2 ring-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.4)]"
+              : "ring-2 ring-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
           }`}
       >
         <YouTube
@@ -618,7 +621,7 @@ export default function IntersectionPage() {
             const dir = suffix;
             if (dir) {
               const q = laneObj.queue_N || 0;
-              newDensities[dir] = `${Math.min(100, Math.round((q / 120) * 100))}%`;
+              newDensities[dir] = `${q} Vehicles`;
             }
           }
           setLaneDensities(newDensities);
@@ -970,16 +973,16 @@ export default function IntersectionPage() {
                   const current = codeRed ? "RED" : laneStates[dir];
                   const isFallback = systemMode === "LEGACY_MICROCONTROLLER";
                   
-                  const waitVal = isFallback ? "--" : (current === "RED" ? `${Math.floor(laneWaitTimers[dir])}s` : "0s");
-                  const greenVal = isFallback ? "--" : (current === "GRN" ? `${laneGreenTimers[dir]}s` : "—");
-                  const density = isFallback ? "--" : (laneDensities[dir] || "0%");
+                  const waitVal = isFallback ? "60s (Fixed)" : (current === "RED" ? `${Math.floor(laneWaitTimers[dir])}s (Dynamic)` : "0s");
+                  const greenVal = isFallback ? "30s (Static)" : (current === "GRN" ? `${laneGreenTimers[dir]}s (Adaptive)` : "—");
+                  const density = isFallback ? "N/A (Sensor Fault)" : (laneDensities[dir] || "0 Vehicles");
                   
                   const lane = { direction: `Camera ${dir}`, density, waitTime: waitVal, greenTime: greenVal, signal: current as "RED" | "YEL" | "GRN" };
                   
                   // Use specific video if it's the 5-camera demo node
                   const vidId = isDemoNode ? (DEMO_LANE_VIDEOS.LANES as any)[dir] || "1EiC9bvVGnk" : (intersection.videoId || "1EiC9bvVGnk");
                   return (
-                    <CameraFeed key={lane.direction} lane={lane} currentSignal={laneStates[dir]} videoId={vidId} streamActive={streamActive} />
+                    <CameraFeed key={lane.direction} lane={lane} currentSignal={laneStates[dir]} videoId={vidId} streamActive={streamActive} isFallback={isFallback} />
                   );
                 })}
               </div>
