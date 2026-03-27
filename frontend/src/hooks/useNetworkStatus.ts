@@ -76,8 +76,14 @@ function generateDevicesForIntersections(tick: number): DeviceStatus[] {
       const issues = status === "online" ? [] :
         POSSIBLE_ISSUES[status].filter((_, i) => (seed + d + i + tick) % 3 === 0).slice(0, 2);
 
-      // Dynamic "last ping" based on tick
-      const pingSeconds = status === "online" ? ((tick * 2 + seed) % 8) + 1 : undefined;
+      // Dynamic absolute "last ping"
+      const now = Date.now();
+      const offlineMin = 5 + ((seed + tick) % 40);
+      const degradedMin = 1 + ((seed + tick) % 14);
+      const onlineSec = ((tick * 2 + seed) % 8) + 1;
+      
+      const pingTime = new Date(now - (status === "offline" ? offlineMin * 60000 : status === "degraded" ? degradedMin * 60000 : onlineSec * 1000));
+      const lastPingTime = pingTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
       allDevices.push({
         id: deviceId,
@@ -86,7 +92,7 @@ function generateDevicesForIntersections(tick: number): DeviceStatus[] {
         location: intersection.name,
         status,
         uptime: status === "offline" ? "0%" : status === "degraded" ? `${72 + (seed % 20)}%` : `${96 + (seed % 4)}.${seed % 10}%`,
-        lastPing: status === "offline" ? `${5 + ((seed + tick) % 40)} min ago` : status === "degraded" ? `${1 + ((seed + tick) % 14)} min ago` : `${pingSeconds} sec ago`,
+        lastPing: lastPingTime,
         firmware: FIRMWARE_VERSIONS[(seed + d) % FIRMWARE_VERSIONS.length],
         issues,
       });

@@ -60,16 +60,30 @@ export function SearchBar({ onSelect, className = "absolute top-6 left-1/2 -tran
 
 export function ProfileAlerts({ setActiveTab, className = "absolute top-6 right-6" }: { setActiveTab?: (tab: string) => void; className?: string }) {
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | null>(null);
+  const [seenAlertKeys, setSeenAlertKeys] = useState<Set<string>>(new Set());
   const { vulnerabilities } = useNetworkStatus();
 
+  // Filter out any vulnerabilities that have already been "seen"
+  const unseenVulnerabilities = vulnerabilities.filter(v => !seenAlertKeys.has(`${v.id}-${v.status}`));
+
   const toggleMenu = (menu: "notifications" | "profile") => {
+    if (openMenu === "notifications") {
+      // Closing notifications: mark everything currently unseen as seen
+      setSeenAlertKeys(prev => {
+        const next = new Set(prev);
+        unseenVulnerabilities.forEach(v => next.add(`${v.id}-${v.status}`));
+        return next;
+      });
+    }
     if (openMenu === menu) setOpenMenu(null);
     else setOpenMenu(menu);
   };
 
-  const handleNotificationClick = (id: string) => {
+  const handleNotificationClick = (id: string, status: string) => {
     if (setActiveTab) {
       setActiveTab("Hardware vulnerability");
+      // Mark as seen when clicked
+      setSeenAlertKeys(prev => new Set(prev).add(`${id}-${status}`));
       setOpenMenu(null);
       setTimeout(() => {
         const el = document.getElementById(`vuln-${id}`);
@@ -92,7 +106,7 @@ export function ProfileAlerts({ setActiveTab, className = "absolute top-6 right-
         >
             <div className="relative">
               <Bell className={`w-6 h-6 ${openMenu === "notifications" ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-300"}`} />
-              {vulnerabilities.length > 0 && (
+              {unseenVulnerabilities.length > 0 && (
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-slate-800"></span>
               )}
             </div>
@@ -102,13 +116,13 @@ export function ProfileAlerts({ setActiveTab, className = "absolute top-6 right-
           <div className="absolute right-0 top-full mt-3 w-[400px] bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-gray-100 dark:border-slate-700/50 overflow-hidden flex flex-col max-h-[500px]">
             <div className="p-4 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center bg-gray-50/50 dark:bg-slate-800/80">
               <h3 className="font-bold text-gray-800 dark:text-white">Active Alerts</h3>
-              <span className="bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 text-xs font-bold px-2 py-1 rounded-full">{vulnerabilities.length} New</span>
+              <span className="bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 text-xs font-bold px-2 py-1 rounded-full">{unseenVulnerabilities.length} New</span>
             </div>
             <div className="overflow-y-auto w-full">
-              {vulnerabilities.map((notif) => (
+              {unseenVulnerabilities.map((notif) => (
                 <div
                   key={notif.id}
-                  onClick={() => handleNotificationClick(notif.id)}
+                  onClick={() => handleNotificationClick(notif.id, notif.status)}
                   className="p-4 border-b border-gray-50 dark:border-slate-700/50 hover:bg-gray-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors flex items-start space-x-3"
                 >
                   <div className={`mt-0.5 p-2 rounded-full ${notif.status === 'Critical' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400'}`}>
@@ -127,17 +141,24 @@ export function ProfileAlerts({ setActiveTab, className = "absolute top-6 right-
                   </div>
                 </div>
               ))}
-              {vulnerabilities.length === 0 && (
+              {unseenVulnerabilities.length === 0 && (
                 <div className="p-8 text-center">
                   <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                     <Bell className="w-6 h-6 text-green-500" />
                   </div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">All systems operational</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">No active alerts at this time</p>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">All caught up</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">No new alerts to review</p>
                 </div>
               )}
             </div>
-            <div className="p-3 bg-gray-50 dark:bg-slate-800/80 border-t border-gray-100 dark:border-slate-700 text-center text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 cursor-pointer">
+            <div 
+              className="p-3 bg-gray-50 dark:bg-slate-800/80 border-t border-gray-100 dark:border-slate-700 text-center text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 cursor-pointer"
+              onClick={() => {
+                if (setActiveTab) setActiveTab("Hardware vulnerability");
+                // Clear dropdown by closing menu (which marks seen)
+                toggleMenu("notifications");
+              }}
+            >
               View all alerts
             </div>
           </div>
