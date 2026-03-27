@@ -645,7 +645,17 @@ export default function IntersectionPage() {
           });
         }
         
-        setEvpCount(data.critical_events?.evp_overrides || 0);
+        const currentEvp = data.critical_events?.evp_overrides || 0;
+        setEvpCount(currentEvp);
+
+        // Auto-clear ambulance alert when traffic payload shows evp_overrides back to 0
+        if (currentEvp === 0 && ambulanceDetectedDir) {
+          setAmbulanceDetectedDir(null);
+          setAmbulanceAlertData(null);
+          setShowAmbulanceModal(false);
+          ambulanceDismissedRef.current = false; // reset so next alert can open modal
+        }
+
         setLiveStatus(data.status === "FAULT_OFFLINE" ? "Red" : (data.status || "Green"));
         setSystemMode(data.systemMode || "AI_OPTIMIZED");
 
