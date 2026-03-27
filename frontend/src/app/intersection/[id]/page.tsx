@@ -627,7 +627,7 @@ export default function IntersectionPage() {
             const dir = suffix;
             if (dir) {
               const q = laneObj.queue_N || 0;
-              newDensities[dir] = `${q} Vehicles`;
+              newDensities[dir] = `${Number(q).toFixed(2)}%`;
             }
           }
           setLaneDensities(newDensities);
@@ -1008,7 +1008,7 @@ export default function IntersectionPage() {
                   
                   const waitVal = isFallback ? "60s (Fixed)" : (current === "RED" ? `${Math.floor(laneWaitTimers[dir] || 0)}s` : "0s");
                   const greenVal = isFallback ? "30s (Static)" : (current === "GRN" || current === "YEL" ? `${laneGreenTimers[dir] ?? 0}s` : "—");
-                  const density = isFallback ? "N/A (Sensor Fault)" : (laneDensities[dir] || "0 Vehicles");
+                  const density = isFallback ? "N/A (Sensor Fault)" : (laneDensities[dir] || "0.00%");
                   
                   const lane = { direction: `Camera ${dir}`, density, waitTime: waitVal, greenTime: greenVal, signal: current as "RED" | "YEL" | "GRN" };
                   
