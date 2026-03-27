@@ -1,13 +1,11 @@
 "use client";
 import React, { useState } from "react";
-import { X, User, Phone, Building, Hash, AlertTriangle, ShieldCheck } from "lucide-react";
+import { X, AlertTriangle, ShieldCheck, Activity } from "lucide-react";
 
 interface AmbulanceModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-const EMERGENCY_LEVEL = 8;
 
 export default function AmbulanceModal({ isOpen, onClose }: AmbulanceModalProps) {
   const [phase, setPhase] = useState<"info" | "otp">("info");
@@ -64,71 +62,30 @@ export default function AmbulanceModal({ isOpen, onClose }: AmbulanceModalProps)
         {/* Body */}
         <div className="p-5">
           {phase === "info" ? (
-            <>
-              <div className="flex gap-5">
-                {/* Photo Placeholder */}
-                <div className="w-28 h-28 rounded-xl bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center flex-shrink-0">
-                  <User className="w-10 h-10 text-gray-300" />
-                </div>
-
-                {/* Info Fields — using a table-style grid to prevent overlap */}
-                <div className="flex-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 items-center">
-                  <div className="flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-gray-400" />
-                    <span className="text-[11px] text-gray-500 font-medium uppercase tracking-wide">Name</span>
-                  </div>
-                  <span className="text-sm font-semibold text-gray-900">Rajesh Kumar</span>
-
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-3.5 h-3.5 text-center text-[9px] font-bold text-gray-400 leading-[14px]">🎂</span>
-                    <span className="text-[11px] text-gray-500 font-medium uppercase tracking-wide">Age</span>
-                  </div>
-                  <span className="text-sm font-semibold text-gray-900">45 yrs</span>
-
-                  <div className="flex items-center gap-1.5">
-                    <Building className="w-3.5 h-3.5 text-gray-400" />
-                    <span className="text-[11px] text-gray-500 font-medium uppercase tracking-wide">Hospital</span>
-                  </div>
-                  <span className="text-sm font-semibold text-gray-900">AIIMS Trauma Centre</span>
-
-                  <div className="flex items-center gap-1.5">
-                    <Hash className="w-3.5 h-3.5 text-gray-400" />
-                    <span className="text-[11px] text-gray-500 font-medium uppercase tracking-wide">Reg. ID</span>
-                  </div>
-                  <span className="text-sm font-semibold text-gray-900 font-mono">AMB-DL-4829</span>
-
-                  <div className="flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-gray-400" />
-                    <span className="text-[11px] text-gray-500 font-medium uppercase tracking-wide">Contact</span>
-                  </div>
-                  <span className="text-sm font-semibold text-gray-900 font-mono">+91 98765-43210</span>
-                </div>
+            <div className="py-4 text-center">
+              <div className="w-20 h-20 mx-auto bg-red-100 rounded-full flex items-center justify-center mb-4 border-4 border-red-50">
+                 <Activity className="w-10 h-10 text-red-600 animate-pulse" />
               </div>
-
-              Emergency Level
-              <div className="mt-6">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Emergency Level</p>
-                  <p className="text-sm font-bold text-red-600">{EMERGENCY_LEVEL}/10</p>
-                </div>
-                <div className="flex gap-1.5">
-                  {Array.from({ length: 10 }, (_, i) => (
-                    <div
-                      key={i}
-                      className={`h-5 flex-1 rounded-sm transition-colors ${
-                        i < EMERGENCY_LEVEL
-                          ? i < 4 ? "bg-amber-400" : i < 7 ? "bg-orange-500" : "bg-red-500"
-                          : "bg-gray-100 border border-gray-200"
-                      }`}
-                    />
-                  ))}
-                </div>
-                <div className="flex justify-between mt-1">
-                  <span className="text-[9px] text-gray-400 font-mono">LOW</span>
-                  <span className="text-[9px] text-gray-400 font-mono">CRITICAL</span>
-                </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Active Preemption</h3>
+              <p className="text-sm text-gray-600 px-4 mb-6">
+                 An emergency vehicle has been detected approaching the intersection. The Traffic Control System has automatically initiated a signal override to clear the intersection.
+              </p>
+              
+              <div className="bg-gray-50 border border-gray-100 rounded-lg p-4 text-left">
+                 <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-semibold text-gray-500 uppercase">Detection Source</span>
+                    <span className="text-sm font-bold text-gray-900">AI Edge Node</span>
+                 </div>
+                 <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-semibold text-gray-500 uppercase">System Status</span>
+                    <span className="text-xs font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded border border-amber-200">EVP OVERRIDE</span>
+                 </div>
+                 <div className="flex justify-between items-center">
+                    <span className="text-xs font-semibold text-gray-500 uppercase">Clearance Protocol</span>
+                    <span className="text-sm font-bold text-green-600">Executing</span>
+                 </div>
               </div>
-            </>
+            </div>
           ) : (
             /* OTP Verification Phase */
             <div className="py-4 text-center">
