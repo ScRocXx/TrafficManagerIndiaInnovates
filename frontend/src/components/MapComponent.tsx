@@ -315,7 +315,7 @@ export default function MapComponent({ onSelectIntersection, selectedIntersectio
         <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700/50">
           <div className="flex items-center gap-1.5 text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-1">
             <Activity className="w-3 h-3" />
-            Total CO₂ Saved Today
+            Total CO₂ Emission Saved Today
           </div>
           <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">
             {totalCO2Saved.toFixed(1)} <span className="text-xs text-gray-500 dark:text-slate-500 font-normal">kg</span>
