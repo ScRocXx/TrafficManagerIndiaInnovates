@@ -202,6 +202,10 @@ def on_mqtt_message(client, userdata, msg):
             print(f"[{datetime.datetime.utcnow().isoformat()}] FIRST PAYLOAD TRIGGER: STREAM_ACTIVE = True")
             
         events = raw_data.get("critical_events_this_minus_cycle") or raw_data.get("critical_events_this_minute", {})
+        
+        if events.get("evp_overrides", 0) == 0 and node_id in AMBULANCE_ALERTS:
+            del AMBULANCE_ALERTS[node_id]
+
         db = database.SessionLocal()
         db_metrics = models.TrafficMetricsRecord(
             node_id=node_id,
@@ -316,6 +320,9 @@ def ingest_traffic(data: TrafficPayload, db: Session = Depends(database.get_db))
     events = data.critical_events_this_minus_cycle or data.critical_events_this_minute
     if not events:
         events = CriticalEvents(evp_overrides=0, gridlock_triggers=0)
+
+    if events.evp_overrides == 0 and data.nodeId in AMBULANCE_ALERTS:
+        del AMBULANCE_ALERTS[data.nodeId]
 
     db_metrics = models.TrafficMetricsRecord(
         node_id=data.nodeId,
