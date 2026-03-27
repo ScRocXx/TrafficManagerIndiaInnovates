@@ -1079,7 +1079,7 @@ export default function IntersectionPage() {
             {/* ── SECURE COMMAND CONSOLE ──                         */}
             {/* ══════════════════════════════════════════════════════ */}
             <section>
-              <div className="bg-gray-50 dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-sm dark:shadow-xl transition-colors">
+              <div className={`bg-gray-50 dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-sm dark:shadow-xl transition-all duration-500 ${systemMode === "LEGACY_MICROCONTROLLER" ? "opacity-30 pointer-events-none grayscale" : ""}`}>
 
                 {/* Console Header */}
                 <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-200 dark:border-slate-700/50 bg-gray-100/50 dark:bg-slate-800/60 transition-colors">
