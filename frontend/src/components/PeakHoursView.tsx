@@ -64,7 +64,9 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
           const newData: IntersectionPeakData[] = intersections.map(node => {
             const live = liveData.find((l: any) => l.nodeId === node.nodeId);
             const seed = parseInt(node.nodeId.slice(-3)) || 100;
-            const baseVol = 500 + seed * 5;
+            
+            const status = live ? (live.status as "Red" | "Yellow" | "Green") : ((seed % 10 < 2) ? "Red" : (seed % 10 < 5) ? "Yellow" : "Green");
+            const baseVol = status === "Red" ? 1200 : status === "Yellow" ? 800 : 400;
             
             const hourlyMock = [
               { hour: "6AM", vehicles: Math.floor(baseVol) }, 
@@ -78,15 +80,17 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
               { hour: "10PM", vehicles: Math.floor(baseVol * 0.8) },
             ];
 
+            const congestion = live ? live.congestionLevel : (status === "Red" ? 0.78 : status === "Yellow" ? 0.48 : 0.15);
+
             return {
               id: node.nodeId,
               name: node.name,
-              status: (live?.status as "Red" | "Yellow" | "Green") || "Green",
+              status: status,
               peakHour: "6:00 PM",
-              peakVolume: live ? Math.floor(Math.max(live.vehiclesPassed * 5, baseVol * 4)) : Math.floor(baseVol * 4),
-              avgPValue: live?.congestionLevel || 0,
-              maxCongestionHrs: (live?.congestionLevel || 0) > 0.6 ? +((live?.congestionLevel || 0) * 6).toFixed(1) : 1.5,
-              clearanceWindow: "10 PM – 5 AM",
+              peakVolume: live ? Math.floor(Math.max(live.vehiclesPassed * 5, baseVol * 4)) : Math.floor(baseVol * 4.5),
+              avgPValue: congestion,
+              maxCongestionHrs: congestion > 0.6 ? +(congestion * 6).toFixed(1) : 1.5,
+              clearanceWindow: status === "Red" ? "1 AM – 4 AM" : "10 PM – 5 AM",
               hourlyData: hourlyMock
             };
           });

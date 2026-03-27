@@ -43,18 +43,20 @@ export default function MostBusiestView({ setActiveTab }: { setActiveTab?: (tab:
           } else {
             // Deterministic mock fallback for nodes not in DB
             const seed = parseInt(node.nodeId.slice(-3)) || 100;
-            const mockVehicles = 2500 + (seed * 40);
+            const status = (seed % 10 < 2) ? "Red" : (seed % 10 < 5) ? "Yellow" : "Green";
+            const mockVehicles = status === "Red" ? 4500 + (seed * 10) : status === "Yellow" ? 3000 + (seed * 10) : 1500 + (seed * 10);
+            
             return {
               rank: 0,
               name: node.name,
               nodeId: node.nodeId,
               avgVehicles: mockVehicles,
-              peakVehicles: Math.floor(mockVehicles * 1.4),
+              peakVehicles: Math.floor(mockVehicles * 1.3),
               peakTime: "Scheduled",
-              avgWait: `${Math.floor(seed / 10) + 5} min`,
-              trend: "down",
-              change: "Steady",
-              status: "Green"
+              avgWait: `${status === "Red" ? 12 : status === "Yellow" ? 7 : 3} min`,
+              trend: status === "Red" ? "up" : "down",
+              change: status === "Red" ? "+12%" : "Steady",
+              status: status
             };
           }
         });

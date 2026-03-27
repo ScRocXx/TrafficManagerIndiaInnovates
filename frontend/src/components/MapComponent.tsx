@@ -78,8 +78,28 @@ function TelemetryMarkers({ onSelectIntersection, isDark }: { onSelectIntersecti
     intersections.forEach((item) => {
       // Merge live status if available
       const live = liveStatus[item.nodeId];
-      const currentStatus = live?.status || "Green";
-      const currentP = live ? live.congestionLevel : 0;
+      
+      let currentStatus: string;
+      let currentP: number;
+
+      if (live) {
+        currentStatus = live.status || "Green";
+        currentP = live.congestionLevel;
+      } else {
+        // Deterministic mock randomization
+        const seed = parseInt(item.nodeId.slice(-3)) || 100;
+        currentStatus = (seed % 10 < 2) ? "Red" : (seed % 10 < 5) ? "Yellow" : "Green";
+        
+        // Scale P-value based on mock status
+        if (currentStatus === "Red") {
+          currentP = 0.75 + (seed % 20) / 100;
+        } else if (currentStatus === "Yellow") {
+          currentP = 0.45 + (seed % 15) / 100;
+        } else {
+          currentP = 0.12 + (seed % 10) / 100;
+        }
+      }
+
       const enrichedItem = { ...item, status: currentStatus, p: currentP };
 
       const { hex } = STATUS_COLORS[currentStatus] || STATUS_COLORS.Green;
