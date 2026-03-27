@@ -749,7 +749,7 @@ export default function IntersectionPage() {
         return n;
       });
 
-      // Auto-transition to YELLOW on frontend when green timer <= 5s
+      // Auto-transition to YELLOW on frontend when green timer <= 4s
       setLaneStates(prevStates => {
          let changed = false;
          const newStates = { ...prevStates };
@@ -760,7 +760,7 @@ export default function IntersectionPage() {
                if (startTime && duration !== undefined) {
                   const elapsedSec = (Date.now() - startTime) / 1000;
                   const remaining = duration - elapsedSec;
-                  if (remaining <= 5) {
+                  if (remaining <= 4) {
                      newStates[dir] = "YEL"; 
                      changed = true;
                   }

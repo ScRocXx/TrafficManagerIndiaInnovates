@@ -310,17 +310,17 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
         # deterministic random seed based on node_id so each node is a bit different
         seed = int(hashlib.md5(node_id.encode()).hexdigest(), 16)
         
-        # 120 second cycle
+        # 136 second cycle (34s per phase)
         now = int(datetime.datetime.utcnow().timestamp())
-        cycle_time = (now + seed) % 120
+        cycle_time = (now + seed) % 136
         
-        # Phase 01: 0-30s. Phase 02: 30-60s. Phase 03: 60-90s. Phase 04: 90-120s
-        phase_idx = cycle_time // 30
+        # Phase 01: 0-34s. Phase 02: 34-68s. Phase 03: 68-102s. Phase 04: 102-136s
+        phase_idx = cycle_time // 34
         active_phase = f"{node_id}-0{phase_idx + 1}"
         
-        # Inside the 30s phase, first 25s is GREEN, last 5s is YELLOW
-        phase_sec = cycle_time % 30
-        engine_state = "BASE_GREEN" if phase_sec < 25 else "YELLOW_HANDOVER"
+        # Inside the 34s phase, first 30s is GREEN, last 4s is YELLOW
+        phase_sec = cycle_time % 34
+        engine_state = "BASE_GREEN" if phase_sec < 30 else "YELLOW_HANDOVER"
         
         # Generate some deterministic but realistic-looking queue numbers based on cycle time
         lane_metrics = {}
@@ -344,6 +344,8 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
             "state_snapshot": {
                 "active_phase": active_phase,
                 "engine_state": engine_state,
+                "green_timer": 34,
+                "total_green_elapsed": phase_sec,
                 "box_gridlock_pct": float((seed % 30) + 10.0),
                 "trigger": "STATE_TRANSITION"
             },
