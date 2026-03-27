@@ -202,6 +202,10 @@ def on_mqtt_message(client, userdata, msg):
             print(f"[{datetime.datetime.utcnow().isoformat()}] FIRST PAYLOAD TRIGGER: STREAM_ACTIVE = True")
             
         events = raw_data.get("critical_events_this_minus_cycle") or raw_data.get("critical_events_this_minute", {})
+        
+        if events.get("evp_overrides", 0) == 0 and node_id in AMBULANCE_ALERTS:
+            del AMBULANCE_ALERTS[node_id]
+
         db = database.SessionLocal()
         db_metrics = models.TrafficMetricsRecord(
             node_id=node_id,
@@ -251,6 +255,8 @@ class StateSnapshot(BaseModel):
     engine_state: str
     box_gridlock_pct: float
     trigger: str | None = None
+    green_timer: int | None = None
+    total_green_elapsed: int | None = None
 
 class LaneMetric(BaseModel):
     queue_N: int
@@ -271,9 +277,10 @@ class TrafficPayload(BaseModel):
 
 class OverrideRequest(BaseModel):
     nodeId: str
-    lane: str
+    lane: str | None = None
     state: str
-    reason: str
+    reason: str | None = None
+    duration: int | None = None
 
 # --- API Routes ---
 @app.get("/")
@@ -315,6 +322,9 @@ def ingest_traffic(data: TrafficPayload, db: Session = Depends(database.get_db))
     if not events:
         events = CriticalEvents(evp_overrides=0, gridlock_triggers=0)
 
+    if events.evp_overrides == 0 and data.nodeId in AMBULANCE_ALERTS:
+        del AMBULANCE_ALERTS[data.nodeId]
+
     db_metrics = models.TrafficMetricsRecord(
         node_id=data.nodeId,
         timestamp=data.timestamp,
@@ -338,36 +348,60 @@ def override_signal(data: OverrideRequest):
     ghost_id = _nodeid_to_ghost(data.nodeId)
     if ghost_id and ghost_id in GHOST_NODES:
         node = GHOST_NODES[ghost_id]
-        target_lane = data.lane  # "01", "02", "03", "04"
-        target_state = data.state.upper()  # "GRN", "RED", "YEL"
+        target_state = data.state.upper()  # "GRN", "RED", "YEL", "CODE_RED", "RESET"
 
-        if target_lane in LANE_IDS:
-            # Force the requested lane green, others red
-            if target_state in ("GRN", "GREEN"):
-                for lid in LANE_IDS:
-                    node["lanes"][lid]["is_green"] = (lid == target_lane)
-                    if lid == target_lane:
-                        node["lanes"][lid]["wait_time"] = 0
-                node["active_green_lane"] = target_lane
-                node["remaining_green_time"] = 45
-            elif target_state in ("RED", "YEL", "YELLOW"):
-                # Force this lane red; pick another lane to go green
-                if node["active_green_lane"] == target_lane:
-                    node["lanes"][target_lane]["is_green"] = False
-                    alt = [l for l in LANE_IDS if l != target_lane]
-                    new_green = random.choice(alt)
-                    node["lanes"][new_green]["is_green"] = True
-                    node["lanes"][new_green]["wait_time"] = 0
-                    node["active_green_lane"] = new_green
-                    node["remaining_green_time"] = 30
+        if target_state == "RESET":
+            # Deactivate any overrides and resume normal physics
+            if ghost_id in GHOST_OVERRIDES:
+                del GHOST_OVERRIDES[ghost_id]
+            print(f"[GHOST OVERRIDE] {ghost_id} RESET to normal physics")
+            return {"success": True, "message": "Override cleared."}
 
-            # Freeze physics for 45 seconds so the override is visible
+        elif target_state == "CODE_RED":
+            # Freeze all lanes to red
+            for lid in LANE_IDS:
+                node["lanes"][lid]["is_green"] = False
+                node["lanes"][lid]["wait_time"] += 1
+            node["active_green_lane"] = None
+            node["remaining_green_time"] = 0
+            
+            # Freeze physics for 1 hour until manually canceled
             GHOST_OVERRIDES[ghost_id] = {
-                "lane": target_lane,
-                "state": target_state,
-                "expires": datetime.datetime.utcnow() + datetime.timedelta(seconds=45),
+                "lane": "ALL",
+                "state": "CODE_RED",
+                "expires": datetime.datetime.utcnow() + datetime.timedelta(hours=1),
             }
-            print(f"[GHOST OVERRIDE] {ghost_id} lane {target_lane} -> {target_state} for 45s")
+            print(f"[GHOST OVERRIDE] {ghost_id} CODE_RED active")
+
+        else:
+            target_lane = data.lane  # "01", "02", "03", "04"
+            override_seconds = data.duration if data.duration else 45
+            if target_lane in LANE_IDS:
+                if target_state in ("GRN", "GREEN"):
+                    for lid in LANE_IDS:
+                        node["lanes"][lid]["is_green"] = (lid == target_lane)
+                        if lid == target_lane:
+                            node["lanes"][lid]["wait_time"] = 0
+                    node["active_green_lane"] = target_lane
+                    node["remaining_green_time"] = override_seconds
+                elif target_state in ("RED", "YEL", "YELLOW"):
+                    # Force this lane red; pick another lane to go green
+                    if node["active_green_lane"] == target_lane:
+                        node["lanes"][target_lane]["is_green"] = False
+                        alt = [l for l in LANE_IDS if l != target_lane]
+                        new_green = random.choice(alt)
+                        node["lanes"][new_green]["is_green"] = True
+                        node["lanes"][new_green]["wait_time"] = 0
+                        node["active_green_lane"] = new_green
+                        node["remaining_green_time"] = override_seconds
+
+                # Freeze physics the requested duration so the override holds
+                GHOST_OVERRIDES[ghost_id] = {
+                    "lane": target_lane,
+                    "state": target_state,
+                    "expires": datetime.datetime.utcnow() + datetime.timedelta(seconds=override_seconds),
+                }
+                print(f"[GHOST OVERRIDE] {ghost_id} lane {target_lane} -> {target_state} for {override_seconds}s")
 
     return {"success": True, "message": "Signal transmitted to Edge Jetson device."}
 
@@ -426,12 +460,13 @@ def get_latest_traffic(db: Session = Depends(database.get_db)):
             # (which ranges from 2000 to 14000 in the static data)
             vehicles_passed = max(1200, estimated_volume * 15) # Scale up to match dashboard norms
 
-            # Check node health
+            # Check node health (Dynamic fault timeout: green_timer + 20 seconds)
             last_seen = LAST_SEEN_NODES.get(m.node_id)
             is_offline = False
+            timeout_limit = state.get("green_timer", 30) + 20 if state else 50
             if last_seen:
                 seconds_since = (datetime.datetime.utcnow() - last_seen).total_seconds()
-                if seconds_since > 20: # 20 second timeout
+                if seconds_since > timeout_limit:
                     is_offline = True
             
             # Status calculation
@@ -488,66 +523,63 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
     """Returns the raw detailed metric payload for a specific intersection"""
     record = db.query(models.TrafficMetricsRecord).filter(models.TrafficMetricsRecord.node_id == node_id).order_by(models.TrafficMetricsRecord.timestamp.desc()).first()
     if not record:
-        import hashlib
-        # deterministic random seed based on node_id so each node is a bit different
-        seed = int(hashlib.md5(node_id.encode()).hexdigest(), 16)
-        
-        # 136 second cycle (34s per phase)
-        now = int(datetime.datetime.utcnow().timestamp())
-        cycle_time = (now + seed) % 136
-        
-        # Phase 01: 0-34s. Phase 02: 34-68s. Phase 03: 68-102s. Phase 04: 102-136s
-        phase_idx = cycle_time // 34
-        active_phase = f"{node_id}-0{phase_idx + 1}"
-        
-        # Inside the 34s phase, first 30s is GREEN, last 4s is YELLOW
-        phase_sec = cycle_time % 34
-        engine_state = "BASE_GREEN" if phase_sec < 30 else "YELLOW_HANDOVER"
-        
-        # Generate some deterministic but realistic-looking queue numbers based on cycle time
-        lane_metrics = {}
-        for i in range(1, 5):
-            lane_str = f"{node_id}-0{i}"
-            if i - 1 == phase_idx:
-                # Active lane: queue drains, exit flow is high, wait gets reset
-                q = max(0, 30 - phase_sec) 
-                w = 0
-            else:
-                # Inactive lane: queue builds up, wait increases
-                offset = (phase_idx - (i - 1)) % 4
-                time_waiting = (offset * 30) + phase_sec
-                q = int(time_waiting * 0.5) + (seed % 10)
-                w = time_waiting
-            lane_metrics[lane_str] = {"queue_N": q, "wait_time_T": w, "exit_flow": 5 if i-1 == phase_idx else 0}
+        ghost_id = _nodeid_to_ghost(node_id)
+        if ghost_id and ghost_id in GHOST_NODES:
+            node = GHOST_NODES[ghost_id]
+            is_code_red = (ghost_id in GHOST_OVERRIDES and GHOST_OVERRIDES[ghost_id]["state"] == "CODE_RED")
+            
+            # Construct lane metrics mapping to 2845xx format
+            lane_metrics = {}
+            for lid, lane_data in node["lanes"].items():
+                lane_str = f"{node_id}-{lid}"
+                lane_metrics[lane_str] = {
+                    "queue_N": lane_data["density"],
+                    "wait_time_T": lane_data["wait_time"],
+                    "exit_flow": 5 if lane_data["is_green"] else 0
+                }
+            
+            active_phase = f"{node_id}-{node['active_green_lane']}" if node['active_green_lane'] else "CODE_RED"
+            
+            # Calculate engine state based on remaining time if < 4s
+            engine_state = "BASE_GREEN"
+            if is_code_red:
+                engine_state = "FORCE_RED"
+            elif node["remaining_green_time"] <= 4:
+                engine_state = "YELLOW_HANDOVER"
 
-        return {
-            "nodeId": node_id,
-            "timestamp": datetime.datetime.utcnow().isoformat(),
-            "state_snapshot": {
-                "active_phase": active_phase,
-                "engine_state": engine_state,
-                "green_timer": 34,
-                "total_green_elapsed": phase_sec,
-                "box_gridlock_pct": float((seed % 30) + 10.0),
-                "trigger": "STATE_TRANSITION"
-            },
-            "lane_metrics": lane_metrics,
-            "critical_events": {"evp_overrides": 0, "gridlock_triggers": 0},
-            "status": "ONLINE",
-            "systemMode": "AI_OPTIMIZED"
-        }
+            return {
+                "nodeId": node_id,
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+                "state_snapshot": {
+                    "active_phase": active_phase,
+                    "engine_state": engine_state,
+                    "green_timer": node["remaining_green_time"],
+                    "total_green_elapsed": 0,
+                    "box_gridlock_pct": 15.0,
+                    "trigger": "STATE_TRANSITION"
+                },
+                "lane_metrics": lane_metrics,
+                "critical_events": {"evp_overrides": 1 if ghost_id in GHOST_OVERRIDES else 0, "gridlock_triggers": 0},
+                "status": "ONLINE",
+                "systemMode": "AI_OPTIMIZED",
+                "ambulance_alert": AMBULANCE_ALERTS.get(node_id)
+            }
+        
+        return {"error": "Node not mathematically simulated or found"}
     
     is_offline = False
+    timeout_limit = 50
     if record:
+        timeout_limit = record.state_snapshot.get("green_timer", 30) + 20 if record.state_snapshot else 50
         # Check if the actual data is stale (e.g. Jetson crashed and is re-sending a frozen payload)
         seconds_since_record = (datetime.datetime.utcnow() - record.timestamp).total_seconds()
-        if seconds_since_record > 20:
+        if seconds_since_record > timeout_limit:
             is_offline = True
 
     last_seen = LAST_SEEN_NODES.get(node_id)
     if last_seen:
         seconds_since = (datetime.datetime.utcnow() - last_seen).total_seconds()
-        if seconds_since > 20:
+        if seconds_since > timeout_limit:
             is_offline = True
 
     return {
@@ -558,6 +590,7 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
         "critical_events": record.critical_events_this_minute,
         "status": "FAULT_OFFLINE" if is_offline else "ONLINE",
         "systemMode": "LEGACY_MICROCONTROLLER" if is_offline else "AI_OPTIMIZED",
+        "ambulance_alert": AMBULANCE_ALERTS.get(node_id)
     }
 
 @app.get("/api/stream-status")
