@@ -540,6 +540,7 @@ export default function IntersectionPage() {
 
   // Live status from API
   const [liveStatus, setLiveStatus] = useState<string>("Green");
+  const [systemMode, setSystemMode] = useState<string>("AI_OPTIMIZED");
   const [streamActive, setStreamActive] = useState<boolean>(false);
   const [centerPlayer, setCenterPlayer] = useState<any>(null);
 
@@ -639,7 +640,8 @@ export default function IntersectionPage() {
         }
         
         setEvpCount(data.critical_events?.evp_overrides || 0);
-        setLiveStatus(data.status || "Green");
+        setLiveStatus(data.status === "FAULT_OFFLINE" ? "Red" : (data.status || "Green"));
+        setSystemMode(data.systemMode || "AI_OPTIMIZED");
 
         // Ambulance detection from real edge data (ITO only = 284501)
         if (intersection.nodeId === "284501" && data.state_snapshot?.ambulance_detected) {
@@ -847,6 +849,24 @@ export default function IntersectionPage() {
 
       {/* ── Left Panel: Command Center (50%) ── */}
       <div className="w-1/2 h-full flex flex-col border-r border-gray-200 dark:border-slate-800 anim-dashboard-open relative z-10 bg-white dark:bg-slate-950">
+        
+        {/* Legacy Fallback Banner */}
+        {systemMode === "LEGACY_MICROCONTROLLER" && (
+          <div className="bg-red-600 dark:bg-red-800 text-white px-6 py-2.5 flex items-center justify-between animate-pulse shadow-[0_4px_12px_rgba(220,38,38,0.4)] z-20">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5" />
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest">CRITICAL: Jetson AI Platform Offline</p>
+                <p className="text-[10px] font-medium opacity-90">FALLBACK: Running on Legacy Microcontroller (Deterministic Timers)</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 bg-white/20 px-2 py-1 rounded border border-white/30">
+               <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+               <span className="text-[9px] font-bold">HARDCODED MODE</span>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex-shrink-0 p-5 border-b border-gray-100 dark:border-slate-800 bg-gray-50/80 dark:bg-slate-900/80 flex items-center justify-between transition-colors">
           <div className="flex items-center gap-3">
@@ -862,9 +882,9 @@ export default function IntersectionPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${liveStatus === "Red" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : liveStatus === "Yellow" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`} />
-            <span className={`text-xs font-bold uppercase tracking-wider ${liveStatus === "Red" ? "text-red-600 dark:text-red-400" : liveStatus === "Yellow" ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}`}>
-              {liveStatus === "Red" ? "Critical" : liveStatus === "Yellow" ? "Moderate" : "Normal"}
+            <span className={`w-2.5 h-2.5 rounded-full  ${systemMode === "LEGACY_MICROCONTROLLER" ? "bg-red-500 animate-ping ring-4 ring-red-500/20" : "animate-pulse"} ${liveStatus === "Red" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : liveStatus === "Yellow" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`} />
+            <span className={`text-xs font-bold uppercase tracking-wider ${systemMode === "LEGACY_MICROCONTROLLER" ? "text-red-600 dark:text-red-400" : (liveStatus === "Red" ? "text-red-600 dark:text-red-400" : liveStatus === "Yellow" ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400")}`}>
+              {systemMode === "LEGACY_MICROCONTROLLER" ? "Faulted / Fallback" : (liveStatus === "Red" ? "Critical" : liveStatus === "Yellow" ? "Moderate" : "Normal")}
             </span>
           </div>
         </div>

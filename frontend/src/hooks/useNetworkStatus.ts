@@ -159,6 +159,7 @@ function processNodes(networkNodes: NetworkNode[], alertTime: string) {
       "ONLINE": "online",
       "CAMERA_FAULT": "offline",
       "THERMAL_THROTTLE": "degraded",
+      "JETSON_CRASH": "offline",
     };
 
     const deviceId = `CAM-${n.node_id}`;
@@ -183,10 +184,10 @@ function processNodes(networkNodes: NetworkNode[], alertTime: string) {
     if (!isOnline) {
       newVulns.push({
         id: `VULN-${n.node_id}`,
-        type: n.hardware_status === 'CAMERA_FAULT' ? "Camera Offline" : "Thermal Throttling",
-        status: n.hardware_status === 'CAMERA_FAULT' ? "Critical" : "Yellow",
+        type: n.hardware_status === 'JETSON_CRASH' ? "Hardware Failure" : (n.hardware_status === 'CAMERA_FAULT' ? "Camera Offline" : "Thermal Throttling"),
+        status: (n.hardware_status === 'JETSON_CRASH' || n.hardware_status === 'CAMERA_FAULT') ? "Critical" : "Yellow",
         last_ping: alertTime,
-        issue: `Node reported ${n.hardware_status}`,
+        issue: n.hardware_status === 'JETSON_CRASH' ? "CRITICAL: AI Node Platform Offline" : `Node reported ${n.hardware_status}`,
         location: locName,
       });
     }
@@ -260,10 +261,10 @@ export function useNetworkStatus() {
         });
       }
 
-      // Overwrite statuses: force exactly 1 node to have the vulnerability
+      // Overwrite statuses: force exactly 1 node to have the vulnerability (Simulation for dummy nodes)
       networkNodes = networkNodes.map((n, i) => ({
         ...n,
-        hardware_status: i === faultNodeIndex ? faultType : "ONLINE"
+        hardware_status: i === faultNodeIndex && i !== 0 ? faultType : n.hardware_status
       }));
 
       if (!isMounted) return;
@@ -286,6 +287,7 @@ export function useNetworkStatus() {
                   wait_time: heroMatch.avgWaitTime || networkNodes[0].lanes.N?.wait_time || 30,
                 },
               },
+              hardware_status: heroMatch.status === "FAULT_OFFLINE" ? "JETSON_CRASH" : "ONLINE",
             };
           }
         }

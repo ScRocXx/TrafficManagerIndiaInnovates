@@ -30,6 +30,7 @@ app.add_middleware(
 
 # Global Stream Status
 STREAM_ACTIVE = False
+LAST_SEEN_NODES = {} # Tracks {node_id: datetime}
 
 # --- MQTT BACKGROUND WORKER ---
 MQTT_BROKER = "broker.hivemq.com"
@@ -41,7 +42,7 @@ def on_mqtt_connect(client, userdata, flags, reason_code, properties):
     client.subscribe(MQTT_TOPIC)
 
 def on_mqtt_message(client, userdata, msg):
-    global STREAM_ACTIVE
+    global STREAM_ACTIVE, LAST_SEEN_NODES
     try:
         payload_str = msg.payload.decode("utf-8")
         raw_data = json.loads(payload_str)
@@ -49,6 +50,8 @@ def on_mqtt_message(client, userdata, msg):
         node_id = raw_data.get("nodeId")
         if not node_id:
             return
+            
+        LAST_SEEN_NODES[node_id] = datetime.datetime.utcnow()
             
         # First payload received, trigger the global video stream
         if not STREAM_ACTIVE:
@@ -155,7 +158,9 @@ def ingest_traffic(data: TrafficPayload, db: Session = Depends(database.get_db))
     Endpoint for Jetson devices to send real-time traffic inference results.
     Saves the metrics to PostgreSQL.
     """
-    global STREAM_ACTIVE
+    global STREAM_ACTIVE, LAST_SEEN_NODES
+    LAST_SEEN_NODES[data.nodeId] = datetime.datetime.utcnow()
+    
     if not STREAM_ACTIVE:
         STREAM_ACTIVE = True
         print(f"[{datetime.datetime.utcnow().isoformat()}] FIRST HTTP PAYLOAD TRIGGER: STREAM_ACTIVE = True")
@@ -239,12 +244,26 @@ def get_latest_traffic(db: Session = Depends(database.get_db)):
             # (which ranges from 2000 to 14000 in the static data)
             vehicles_passed = max(1200, estimated_volume * 15) # Scale up to match dashboard norms
 
+            # Check node health
+            last_seen = LAST_SEEN_NODES.get(m.node_id)
+            is_offline = False
+            if last_seen:
+                seconds_since = (datetime.datetime.utcnow() - last_seen).total_seconds()
+                if seconds_since > 20: # 20 second timeout
+                    is_offline = True
+            
+            # Status calculation
+            base_status = "Red" if gridlock_p > 0.6 else "Yellow" if gridlock_p > 0.3 else "Green"
+            if is_offline:
+                base_status = "FAULT_OFFLINE"
+
             frontend_traffic.append({
                 "nodeId": m.node_id,
                 "vehiclesPassed": vehicles_passed,
-                "status": "Red" if gridlock_p > 0.6 else "Yellow" if gridlock_p > 0.3 else "Green",
+                "status": base_status,
                 "congestionLevel": gridlock_p,
-                "avgWaitTime": int(avg_wait)
+                "avgWaitTime": int(avg_wait),
+                "systemMode": "LEGACY_MICROCONTROLLER" if is_offline else "AI_OPTIMIZED"
             })
     return frontend_traffic
 
@@ -281,12 +300,21 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
             "critical_events": {"evp_overrides": 0, "gridlock_triggers": 0}
         }
     
+    last_seen = LAST_SEEN_NODES.get(node_id)
+    is_offline = False
+    if last_seen:
+        seconds_since = (datetime.datetime.utcnow() - last_seen).total_seconds()
+        if seconds_since > 20:
+            is_offline = True
+
     return {
         "nodeId": record.node_id,
         "timestamp": record.timestamp.isoformat(),
         "state_snapshot": record.state_snapshot,
         "lane_metrics": record.lane_metrics,
-        "critical_events": record.critical_events_this_minute
+        "critical_events": record.critical_events_this_minute,
+        "status": "FAULT_OFFLINE" if is_offline else "ONLINE",
+        "systemMode": "LEGACY_MICROCONTROLLER" if is_offline else "AI_OPTIMIZED"
     }
 
 @app.get("/api/stream-status")
