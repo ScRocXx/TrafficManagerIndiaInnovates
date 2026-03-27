@@ -659,8 +659,14 @@ export default function IntersectionPage() {
         const currentEvp = data.critical_events?.evp_overrides || 0;
         setEvpCount(currentEvp);
 
-        // Auto-clear ambulance alert when traffic payload shows evp_overrides back to 0
-        if (currentEvp === 0 && ambulanceDetectedDir) {
+        // Use ambulance_alert from traffic payload instead of redundant polling
+        if (data.ambulance_alert) {
+          const laneId = data.ambulance_alert.lane_id || "";
+          const laneSuffix = laneId.split("-").pop() || "01";
+          setAmbulanceDetectedDir(laneSuffix);
+          setAmbulanceAlertData(data.ambulance_alert);
+        } else if (currentEvp === 0 && ambulanceDetectedDir) {
+          // Auto-clear ambulance alert when traffic payload shows evp_overrides back to 0
           setAmbulanceDetectedDir(null);
           setAmbulanceAlertData(null);
           setShowAmbulanceModal(false);
@@ -685,36 +691,7 @@ export default function IntersectionPage() {
     return () => clearInterval(interval);
   }, [intersection]);
 
-  // --- Dedicated Ambulance Alert Polling (completely separate from traffic) ---
-  useEffect(() => {
-    if (!intersection?.nodeId) return;
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
 
-    const fetchAmbulanceAlert = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/ambulance-alerts/${intersection.nodeId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-
-        if (data.active && data.alert) {
-          const laneId = data.alert.lane_id || "";
-          const laneSuffix = laneId.split("-").pop() || "01";
-          setAmbulanceDetectedDir(laneSuffix);
-          setAmbulanceAlertData(data.alert);
-        } else {
-          setAmbulanceDetectedDir(null);
-          setAmbulanceAlertData(null);
-          ambulanceDismissedRef.current = false; // alert stream ended, allow next alert to open modal
-        }
-      } catch (e) {
-        // Silently fail — ambulance polling is non-critical
-      }
-    };
-
-    fetchAmbulanceAlert();
-    const ambInterval = setInterval(fetchAmbulanceAlert, 2000);
-    return () => clearInterval(ambInterval);
-  }, [intersection]);
 
   // Global Tick for Timers
   useEffect(() => {

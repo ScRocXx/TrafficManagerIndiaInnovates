@@ -544,7 +544,8 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
             "lane_metrics": lane_metrics,
             "critical_events": {"evp_overrides": 0, "gridlock_triggers": 0},
             "status": "ONLINE",
-            "systemMode": "AI_OPTIMIZED"
+            "systemMode": "AI_OPTIMIZED",
+            "ambulance_alert": AMBULANCE_ALERTS.get(node_id)
         }
     
     is_offline = False
@@ -570,6 +571,7 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
         "critical_events": record.critical_events_this_minute,
         "status": "FAULT_OFFLINE" if is_offline else "ONLINE",
         "systemMode": "LEGACY_MICROCONTROLLER" if is_offline else "AI_OPTIMIZED",
+        "ambulance_alert": AMBULANCE_ALERTS.get(node_id)
     }
 
 @app.get("/api/stream-status")
