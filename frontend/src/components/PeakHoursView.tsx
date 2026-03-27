@@ -4,7 +4,7 @@ import { Clock, Search, ArrowUpRight, ArrowDownRight, Wrench, Timer, Activity } 
 import { ProfileAlerts } from "./Overlays";
 import { useNetworkStatus, PEAK_TIMES, MAX_CONGESTION_MINS } from "@/hooks/useNetworkStatus";
 import {
-  AreaChart, Area, BarChart, Bar,
+  AreaChart, Area, BarChart, Bar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
 
@@ -66,18 +66,33 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
         avgDensity = laneDensities.reduce((a, b) => a + b, 0) / (laneDensities.length || 1);
       }
 
-      // Simulated hourly density curve seeded from current live density
-      const hourlyData = [
-        { hour: "6AM", density: Math.min(100, avgDensity * 0.3) },
-        { hour: "8AM", density: Math.min(100, avgDensity * 0.7) },
-        { hour: "10AM", density: Math.min(100, avgDensity * 0.55) },
-        { hour: "12PM", density: Math.min(100, avgDensity * 0.65) },
-        { hour: "2PM", density: Math.min(100, avgDensity * 0.6) },
-        { hour: "4PM", density: Math.min(100, avgDensity * 0.8) },
-        { hour: "6PM", density: Math.min(100, avgDensity * 1.0) },
-        { hour: "8PM", density: Math.min(100, avgDensity * 0.5) },
-        { hour: "10PM", density: Math.min(100, avgDensity * 0.2) },
-      ];
+      // Dynamic Pseudo-Random Bimodal Simulation based on exact PEAK_TIMES
+      const peakStr = PEAK_TIMES[idx] || "6:00 PM";
+      let peakHourNum = parseInt(peakStr);
+      if (peakStr.includes("PM") && peakHourNum !== 12) peakHourNum += 12;
+      if (peakStr.includes("AM") && peakHourNum === 12) peakHourNum = 0;
+
+      // Secondary peak offset by ~9 hours (morning/evening rush)
+      const secondaryPeak = (peakHourNum >= 12) ? peakHourNum - 9 : peakHourNum + 9;
+
+      const hourlyData = [6, 8, 10, 12, 14, 16, 18, 20, 22].map(hour => {
+         const dist1 = Math.abs(hour - peakHourNum);
+         const dist2 = Math.abs(hour - secondaryPeak);
+
+         // Gaussian curves for peak shapes
+         const val1 = Math.exp(-0.5 * Math.pow(dist1 / 2.5, 2));
+         const val2 = Math.exp(-0.5 * Math.pow(dist2 / 3.0, 2)) * 0.7; // secondary is 70% height
+         const noise = Math.abs(Math.sin((idx + 1) * hour)) * 0.15;
+
+         const mult = Math.max(val1, val2) + noise + 0.15; // base 15% traffic multiplier
+         
+         // Scale final density tightly to avgDensity of the intersection
+         let finalDensity = avgDensity * mult * 1.5;
+         if (finalDensity > 95) finalDensity = 95 - noise * 10; // realistic cap
+         
+         const label = hour === 12 ? "12PM" : hour > 12 ? `${hour - 12}PM` : `${hour}AM`;
+         return { hour: label, density: Math.max(8, finalDensity) }; // minimum 8%
+      });
 
       const peakDensity = Math.max(...hourlyData.map(h => h.density));
       const maxWait = node ? Math.max(...Object.values(node.lanes).map(l => l.wait_time)) : 0;
@@ -255,7 +270,14 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
                       <XAxis dataKey="hour" tick={{ fill: isDark ? '#475569' : '#94a3b8', fontSize: 9 }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fill: isDark ? '#475569' : '#94a3b8', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} />
                       <Tooltip content={<CustomTooltip isDark={isDark} />} />
-                      <Bar dataKey="density" fill={getBarColor(item.status)} radius={[2, 2, 0, 0]} />
+                      <Bar dataKey="density" radius={[2, 2, 0, 0]}>
+                        {item.hourlyData.map((entry, index) => {
+                           let barFill = getBarColor(item.status);
+                           if (entry.density > 80) barFill = isDark ? "#ef4444" : "#dc2626"; // Red for heavy traffic
+                           else if (entry.density > 55) barFill = isDark ? "#f59e0b" : "#d97706"; // Amber for moderate
+                           return <Cell key={`cell-${index}`} fill={barFill} />;
+                        })}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
