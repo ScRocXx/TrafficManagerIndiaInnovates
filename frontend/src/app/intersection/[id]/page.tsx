@@ -226,26 +226,30 @@ function PinInput({
 interface ConfirmModalProps {
   dir: string;
   currentState: "RED" | "YEL" | "GRN";
-  onConfirm: (reason: string, officerPin: string) => void;
+  onConfirm: (reason: string, officerPin: string, duration?: number) => void;
   onCancel: () => void;
 }
 
 function ConfirmChangeModal({ dir, currentState, onConfirm, onCancel }: ConfirmModalProps) {
   const [reason, setReason] = useState("");
   const [officerPin, setOfficerPin] = useState("");
-  const [errors, setErrors] = useState<{ reason?: string; pin?: string }>({});
+  const [duration, setDuration] = useState("45");
+  const [errors, setErrors] = useState<{ reason?: string; pin?: string; duration?: string }>({});
 
   const nextState = currentState === "GRN" ? "RED" : "GRN";
 
   const handleSubmit = () => {
-    const newErrors: { reason?: string; pin?: string } = {};
+    const newErrors: { reason?: string; pin?: string; duration?: string } = {};
     if (!reason.trim()) newErrors.reason = "Reason is required.";
     if (officerPin !== OFFICER_PIN) newErrors.pin = "Incorrect PIN.";
+    if (nextState === "GRN" && (!duration || isNaN(Number(duration)) || Number(duration) <= 0)) {
+      newErrors.duration = "Invalid duration.";
+    }
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
-    onConfirm(reason.trim(), officerPin);
+    onConfirm(reason.trim(), officerPin, nextState === "GRN" ? Number(duration) : undefined);
   };
 
   return (
@@ -254,15 +258,33 @@ function ConfirmChangeModal({ dir, currentState, onConfirm, onCancel }: ConfirmM
         Confirm: {dir} → <span className={nextState === "GRN" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{nextState}</span>
       </p>
 
-      {/* PIN Row */}
-      <div className="flex items-end gap-3 mb-2">
-        <PinInput
-          label="Officer PIN"
-          value={officerPin}
-          onChange={(v) => { setOfficerPin(v); setErrors((e) => ({ ...e, pin: undefined })); }}
-          hasError={!!errors.pin}
-        />
-        {errors.pin && <p className="text-[10px] text-red-500 mb-1.5">{errors.pin}</p>}
+      {/* Inputs Row */}
+      <div className="flex items-start gap-3 mb-2">
+        <div className="flex flex-col gap-1 w-full max-w-[80px]">
+          <PinInput
+            label="Officer PIN"
+            value={officerPin}
+            onChange={(v) => { setOfficerPin(v); setErrors((e) => ({ ...e, pin: undefined })); }}
+            hasError={!!errors.pin}
+          />
+        </div>
+        
+        {nextState === "GRN" && (
+          <div className="flex flex-col gap-1 w-full max-w-[80px]">
+             <span className="text-[10px] text-gray-400 dark:text-slate-500 font-medium">Duration (s)</span>
+             <input
+               type="number"
+               value={duration}
+               onChange={(e) => { setDuration(e.target.value); setErrors((e2) => ({...e2, duration: undefined}))}}
+               className={`w-16 text-center text-[11px] font-mono py-1.5 px-2 rounded-lg border outline-none transition-all placeholder-gray-300 dark:placeholder-slate-600 bg-white dark:bg-slate-800 text-gray-800 dark:text-slate-200 ${errors.duration ? "border-red-400" : "border-gray-200 dark:border-slate-600 focus:border-blue-400"}`}
+             />
+          </div>
+        )}
+      </div>
+      
+      <div className="flex flex-col mb-2">
+        {errors.pin && <p className="text-[9px] text-red-500 leading-tight">{errors.pin}</p>}
+        {errors.duration && <p className="text-[9px] text-red-500 leading-tight">{errors.duration}</p>}
       </div>
 
       {/* Reason */}
@@ -776,7 +798,7 @@ export default function IntersectionPage() {
   };
 
   /* ── Signal state change (after confirm modal) ── */
-  const handleConfirmedChange = (dir: string, reason: string) => {
+  const handleConfirmedChange = (dir: string, reason: string, duration?: number) => {
     const cur = laneStates[dir];
     const next: "RED" | "GRN" = cur === "GRN" ? "RED" : "GRN";
     
@@ -792,8 +814,9 @@ export default function IntersectionPage() {
       return newState;
     });
 
+    const explicitDuration = duration || 45;
     if (next === "GRN") {
-      setLaneGreenTimers(p => ({ ...p, [dir]: 45 }));
+      setLaneGreenTimers(p => ({ ...p, [dir]: explicitDuration }));
       setLaneWaitTimers(p => ({ ...p, [dir]: 0 }));
     }
 
@@ -802,7 +825,13 @@ export default function IntersectionPage() {
     fetch(`${API_URL}/api/override`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nodeId: intersection?.nodeId || "unknown", lane: dir, state: next, reason })
+      body: JSON.stringify({ 
+        nodeId: intersection?.nodeId || "unknown", 
+        lane: dir, 
+        state: next, 
+        reason,
+        duration: next === "GRN" ? explicitDuration : undefined
+      })
     }).catch(e => console.error("Failed to signal Jetson", e));
 
     if (!laneActive[dir]) setLaneActive((p) => ({ ...p, [dir]: true }));
@@ -1175,7 +1204,7 @@ export default function IntersectionPage() {
                               <ConfirmChangeModal
                                 dir={dir}
                                 currentState={current}
-                                onConfirm={(reason) => handleConfirmedChange(dir, reason)}
+                                onConfirm={(reason, officerPin, duration) => handleConfirmedChange(dir, reason, duration)}
                                 onCancel={() => setConfirmChangeLane(null)}
                               />
                             )}
@@ -1194,12 +1223,28 @@ export default function IntersectionPage() {
                     onActivate={() => {
                       setCodeRed(true);
                       setCodeRedTimer(0);
+                      
+                      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+                      fetch(`${API_URL}/api/override`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ nodeId: intersection?.nodeId || "unknown", state: "CODE_RED", reason: "Emergency Code Red" })
+                      }).catch(e => console.error("Failed to signal Code Red", e));
+
                       addAudit("All lanes", "CODE RED", "Code Red activated — Officer #214 + Supervisor #08");
                       showToast("CODE RED ACTIVATED", "error");
                     }}
                     onDeactivate={() => {
                       setCodeRed(false);
                       setCodeRedTimer(0);
+
+                      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+                      fetch(`${API_URL}/api/override`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ nodeId: intersection?.nodeId || "unknown", state: "RESET", reason: "Code Red Deactivated" })
+                      }).catch(e => console.error("Failed to reset Code Red", e));
+
                       addAudit("All lanes", "DEACT", "Code Red deactivated");
                       showToast("Code Red deactivated", "success");
                     }}
