@@ -607,6 +607,18 @@ export default function IntersectionPage() {
           }
         }
         
+        // Handle EVP Override logic in frontend UI
+        if (data.systemMode === "EVP_OVERRIDE" && data.ambulance_detected) {
+          const ambLane = data.ambulance_data?.lane_id?.split("-").pop() || "01";
+          Object.keys(newLaneStates).forEach(k => {
+             newLaneStates[k] = k === ambLane ? "GRN" : "RED";
+          });
+          if (!showAmbulanceModal) setShowAmbulanceModal(true);
+          setAmbulanceDetectedDir(ambLane);
+        } else {
+           setAmbulanceDetectedDir(null);
+        }
+
         setLaneStates(newLaneStates as Record<string, "RED" | "YEL" | "GRN">);
         
         if (data.lane_metrics) {
@@ -647,15 +659,6 @@ export default function IntersectionPage() {
         setEvpCount(data.critical_events?.evp_overrides || 0);
         setLiveStatus(data.status === "FAULT_OFFLINE" ? "Red" : (data.status || "Green"));
         setSystemMode(data.systemMode || "AI_OPTIMIZED");
-
-        // Ambulance detection from real edge data (ITO only = 284501)
-        if (intersection.nodeId === "284501" && data.state_snapshot?.ambulance_detected) {
-          // Map the ambulance lane suffix to cam ID
-          const ambLane = data.state_snapshot.ambulance_lane || "01";
-          setAmbulanceDetectedDir(ambLane);
-        } else {
-          setAmbulanceDetectedDir(null);
-        }
 
         // Activate stream when valid traffic data arrives (no separate endpoint needed)
         if (data.lane_metrics && Object.keys(data.lane_metrics).length > 0 && !streamActive) {
@@ -821,6 +824,22 @@ export default function IntersectionPage() {
 
     addAudit(dir, targetState, "Manual quick switch (Unlocked)");
     showToast(`${dir} manually set to ${targetState}`, "success");
+  };
+
+  const handleCloseAmbulance = async () => {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+      await fetch(`${API_URL}/api/clear-ambulance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nodeId: intersection?.nodeId })
+      });
+      setShowAmbulanceModal(false);
+      setAmbulanceDetectedDir(null);
+      showToast("Emergency Priority Cleared", "success");
+    } catch (e) {
+      console.error("Failed to clear ambulance", e);
+    }
   };
 
   /* ── Override toggle ── */
