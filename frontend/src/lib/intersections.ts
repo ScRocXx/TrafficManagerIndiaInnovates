@@ -16,6 +16,18 @@ const DEMO_VIDEOS = [
   "8mBJUCEtk_k", // London
 ];
 
+// Configuration for the 5 custom videos at the main demo intersection
+export const DEMO_LANE_VIDEOS = {
+  NODE_ID: "284501", // Make sure this matches your Jetson Simulator NODE_ID
+  CENTER: "1EiC9bvVGnk", // Replace with your Center Box PTZ YouTube ID
+  LANES: {
+    "01": "Nic5HvCd778", // Lane 1
+    "02": "gHEcS4stEIU", // Lane 2
+    "03": "iJZcjZD0fw0", // Lane 3
+    "04": "7LrWGGJFEJo"  // Lane 4
+  }
+};
+
 export const intersections: IntersectionData[] = [
   { id: 1, nodeId: "284501", name: "ITO Junction", lat: 28.6271, lng: 77.2403, videoId: DEMO_VIDEOS[0] },
   { id: 2, nodeId: "284502", name: "AIIMS", lat: 28.5675, lng: 77.2069, videoId: DEMO_VIDEOS[1] },
