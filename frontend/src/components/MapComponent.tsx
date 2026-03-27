@@ -167,27 +167,6 @@ function TelemetryMarkers({ onSelectIntersection, isDark }: { onSelectIntersecti
   return null;
 }
 
-function CustomZoomControl() {
-  const map = useMap();
-  return (
-    <div className="absolute top-24 right-6 z-[1000] flex flex-col shadow-xl rounded-lg overflow-hidden bg-slate-900/90 backdrop-blur-sm border border-slate-700/50 transition-colors">
-      <button
-        onClick={() => map.zoomIn()}
-        className="w-10 h-10 flex items-center justify-center hover:bg-slate-700 transition-colors border-b border-slate-700 text-slate-400"
-        title="Zoom In"
-      >
-        <Plus className="w-4 h-4" />
-      </button>
-      <button
-        onClick={() => map.zoomOut()}
-        className="w-10 h-10 flex items-center justify-center hover:bg-slate-700 transition-colors text-slate-400"
-        title="Zoom Out"
-      >
-        <Minus className="w-4 h-4" />
-      </button>
-    </div>
-  );
-}
 
 function MapResizer({ selectedIntersection }: { selectedIntersection: IntersectionData | null }) {
   const map = useMap();
@@ -270,57 +249,41 @@ export default function MapComponent({ onSelectIntersection, selectedIntersectio
         <TileLayer
           key={isDark ? "dark" : "light"}
           url={isDark
-            ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            ? "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
             : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           }
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href={isDark ? "https://stadiamaps.com/" : "https://carto.com/attributions"}>{isDark ? "Stadia Maps" : "CARTO"}</a>'
         />
 
         <TelemetryMarkers onSelectIntersection={onSelectIntersection} isDark={isDark} />
-        <CustomZoomControl />
         <MapResizer selectedIntersection={selectedIntersection} />
         {focusIntersection && onFocusHandled && (
           <FocusHandler focusIntersection={focusIntersection} onFocusHandled={onFocusHandled} />
         )}
       </MapContainer>
 
-      {/* Floating Search Pill - Matches the visual reference */}
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-lg px-4 drop-shadow-2xl">
-        <div className="relative group">
-          <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
-            <Search className="w-5 h-5 text-slate-500 group-focus-within:text-sky-400 transition-colors" />
-          </div>
-          <input
-            type="text"
-            placeholder="Search intersections..."
-            className="w-full h-14 pl-14 pr-24 bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-2xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500/40 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all"
-            onChange={(e) => {
-               // Optional: trigger flyTo on search
-            }}
-          />
-          <div className="absolute right-5 top-1/2 -translate-y-1/2 flex items-center">
-            <div className="flex flex-col items-end">
-              <span className="text-[9px] font-mono text-slate-500 uppercase tracking-tighter leading-none mb-1">active_node</span>
-              <span className="text-[11px] font-mono text-sky-400 font-bold leading-none">ID: 284501</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Redesigned Map Legend - Matches the visual reference */}
-      <div className="absolute bottom-8 left-8 z-[1000] bg-slate-900/90 backdrop-blur-xl border border-slate-700/60 rounded-xl px-5 py-4 shadow-2xl transition-transform hover:scale-105 duration-300">
-        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mb-4 flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-600 animate-pulse"></span>
-          NODE STATUSES
-        </p>
-        <div className="flex flex-col gap-3">
-          {Object.entries(STATUS_COLORS).map(([key, { hex, label }]) => (
-            <div key={key} className="flex items-center gap-4 group">
-              <div style={{ width: 7, height: 7, background: hex, transform: "rotate(45deg)", boxShadow: `0 0 8px ${hex}80` }} className="transition-transform group-hover:scale-125" />
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono font-black w-10 transition-colors" style={{ color: hex }}>{label}</span>
-                <span className="text-[11px] font-mono text-slate-600 tracking-tighter">—</span>
-                <span className="text-[11px] font-medium text-slate-400 group-hover:text-slate-200 transition-colors">{key === "Red" ? "Critical" : key === "Yellow" ? "Moderate" : "Normal"}</span>
+      {/* Node Status Legend */}
+      <div className="absolute bottom-6 left-6 z-[1000] bg-white/90 dark:bg-slate-800/90 backdrop-blur-md rounded-2xl shadow-xl border border-gray-100/50 dark:border-slate-700/50 p-5 pointer-events-none min-w-[200px]">
+        <h3 className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-4">Node Status</h3>
+        <div className="space-y-3">
+          {[
+            { color: "#ef4444", short: "CRIT", label: "Critical" },
+            { color: "#f59e0b", short: "MOD", label: "Moderate" },
+            { color: "#0ea5e9", short: "NOM", label: "Normal" }
+          ].map(status => (
+            <div key={status.short} className="flex items-center space-x-3">
+              <div 
+                className="w-2.5 h-2.5 flex-shrink-0"
+                style={{
+                  backgroundColor: status.color,
+                  transform: 'rotate(45deg)',
+                  boxShadow: `0 0 6px ${status.color}80`
+                }}
+              />
+              <div className="flex items-center space-x-2 text-xs font-mono">
+                <span className="font-bold" style={{ color: status.color }}>{status.short}</span>
+                <span className="text-gray-300 dark:text-slate-600">—</span>
+                <span className="text-gray-600 dark:text-slate-400 font-sans tracking-wide">{status.label}</span>
               </div>
             </div>
           ))}

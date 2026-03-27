@@ -2,7 +2,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Clock, Search, ArrowUpRight, ArrowDownRight, Wrench, Timer, Activity } from "lucide-react";
 import { ProfileAlerts } from "./Overlays";
-import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { useNetworkStatus, PEAK_TIMES, MAX_CONGESTION_MINS } from "@/hooks/useNetworkStatus";
 import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -86,15 +86,17 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
         id: `INT-${idx + 1}`,
         name: intersection.name,
         status: intersection.status as any,
-        peakHour: "6:00 PM",
+        peakHour: PEAK_TIMES[idx] || "6:00 PM",
         peakVolume: Math.round(peakDensity),
         avgPValue: intersection.p,
-        maxCongestionHrs: Number((intersection.p * 5).toFixed(1)),
+        maxCongestionHrs: MAX_CONGESTION_MINS[idx] || 25,
         clearanceWindow: intersection.status === "Red" ? "1 AM – 4 AM" : "10 PM – 5 AM",
         hourlyData
       };
     });
   }, [nodes, intersections]);
+
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Check initial dark mode state
@@ -111,7 +113,12 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
 
     observer.observe(document.documentElement, { attributes: true });
 
-    return () => observer.disconnect();
+    const timer = setTimeout(() => setIsLoading(false), 1200);
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+    };
   }, []);
 
   const setCardRef = useCallback((id: string) => (el: HTMLDivElement | null) => {
@@ -156,8 +163,17 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
     Green: "bg-gray-400 dark:bg-slate-500",
   };
 
+  if (isLoading) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
+        <div className="w-10 h-10 border-4 border-gray-200 dark:border-slate-800 border-t-blue-500 dark:border-t-blue-500 rounded-full animate-spin mb-4"></div>
+        <p className="text-sm text-gray-500 dark:text-slate-400 font-mono uppercase tracking-widest">Loading Peak Data...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full h-full flex overflow-hidden bg-gray-50 dark:bg-slate-950 transition-colors duration-300 relative">
+    <div className="w-full h-full flex flex-col md:flex-row overflow-hidden bg-gray-50 dark:bg-slate-950 transition-colors duration-300 relative">
       {/* Profile & Notification Buttons */}
       <ProfileAlerts setActiveTab={setActiveTab} className="absolute top-2 right-6" />
 
@@ -251,7 +267,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
                       <Timer className="w-3 h-3" />
                       Max Congestion
                     </div>
-                    <p className="text-lg font-bold text-gray-900 dark:text-white font-mono">{item.maxCongestionHrs} <span className="text-xs text-gray-500 dark:text-slate-500 font-normal">hrs</span></p>
+                    <p className="text-lg font-bold text-gray-900 dark:text-white font-mono">{item.maxCongestionHrs} <span className="text-xs text-gray-500 dark:text-slate-500 font-normal">min</span></p>
                   </div>
                   <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-3 border border-gray-100 dark:border-slate-700/30 transition-colors">
                     <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-1">

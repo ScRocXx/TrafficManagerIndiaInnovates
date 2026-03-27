@@ -1,9 +1,9 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 import { BarChart2, ArrowUpRight, ArrowDownRight, Car, Timer, Flame } from "lucide-react";
 import Link from "next/link";
 import { ProfileAlerts } from "./Overlays";
-import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { useNetworkStatus, PEAK_TIMES } from "@/hooks/useNetworkStatus";
 
 const statusDot: Record<string, string> = {
   Red: "bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.8)] dark:bg-red-500 dark:shadow-[0_0_8px_rgba(239,68,68,0.8)]",
@@ -29,7 +29,7 @@ export default function MostBusiestView({ setActiveTab }: { setActiveTab?: (tab:
         name: inter.name,
         avgDensity,
         peakDensity,
-        peakTime: "6:00 PM",
+        peakTime: PEAK_TIMES[idx] || "6:00 PM",
         avgWait: avgWaitStr,
         trend: avgDensity > 50 ? "up" as const : "down" as const,
         change: avgDensity > 50 ? `+${Math.round(avgDensity * 0.08)}%` : `-${Math.round((100 - avgDensity) * 0.05)}%`,
@@ -40,6 +40,22 @@ export default function MostBusiestView({ setActiveTab }: { setActiveTab?: (tab:
     .sort((a, b) => b.avgDensity - a.avgDensity)
     .map((item, idx) => ({ ...item, rank: idx + 1 }));
   }, [nodes, intersections]);
+
+  const [isLoading, setIsLoading] = useState(true);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 dark:bg-slate-950 transition-colors duration-300">
+        <div className="w-10 h-10 border-4 border-gray-200 dark:border-slate-800 border-t-orange-500 dark:border-t-orange-500 rounded-full animate-spin mb-4"></div>
+        <p className="text-sm text-gray-500 dark:text-slate-400 font-mono uppercase tracking-widest">Loading Activity...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-slate-950 p-8 transition-colors duration-300 relative">

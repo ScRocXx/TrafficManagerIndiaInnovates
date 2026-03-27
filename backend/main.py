@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 import datetime
+import random
 from sqlalchemy.orm import Session
 import json
 import threading
@@ -232,6 +233,25 @@ def get_latest_traffic(db: Session = Depends(database.get_db)):
                 "avgWaitTime": int(avg_wait)
             })
     return frontend_traffic
+
+@app.get("/api/network-status")
+def get_network_status():
+    """Simulate multi-node network status for the V6 dashboard mapping."""
+    nodes = []
+    for i in range(1, 13):
+        # Give the first two nodes higher density to make them critical "red" in UI
+        density = 85 if i <= 2 else random.randint(15, 70)
+        status = "ONLINE"
+        if random.random() < 0.05:
+            status = random.choice(["CAMERA_FAULT", "THERMAL_THROTTLE"])
+        nodes.append({
+            "node_id": f"Node_{i}",
+            "hardware_status": status,
+            "lanes": {
+               "N": {"density": density, "wait_time": random.randint(10, 55)}
+            }
+        })
+    return {"status": "success", "nodes": nodes}
 
 @app.get("/api/traffic/{node_id}")
 def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):

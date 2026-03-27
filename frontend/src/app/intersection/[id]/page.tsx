@@ -90,14 +90,13 @@ function CameraFeed({ lane, currentSignal, videoId }: { lane: LaneData; currentS
 }
 
 /* ── Emergency Compass ── */
-function EmergencyCompass({ onAmbulanceClick }: { onAmbulanceClick: () => void }) {
-  const dirs = ["N", "E", "S", "W"] as const;
-  const ambulanceDir = "N";
+function EmergencyCompass({ ambulanceDir, onAmbulanceClick }: { ambulanceDir: string | null; onAmbulanceClick: () => void }) {
+  const dirs = ["01", "02", "03", "04"] as const;
   const positions: Record<string, string> = {
-    N: "top-1 left-1/2 -translate-x-1/2",
-    E: "right-1 top-1/2 -translate-y-1/2",
-    S: "bottom-1 left-1/2 -translate-x-1/2",
-    W: "left-1 top-1/2 -translate-y-1/2",
+    "01": "top-1 left-1/2 -translate-x-1/2",
+    "02": "right-1 top-1/2 -translate-y-1/2",
+    "03": "bottom-1 left-1/2 -translate-x-1/2",
+    "04": "left-1 top-1/2 -translate-y-1/2",
   };
 
   return (
@@ -108,7 +107,7 @@ function EmergencyCompass({ onAmbulanceClick }: { onAmbulanceClick: () => void }
         <div className="w-3 h-3 rounded-full bg-gray-400 dark:bg-slate-500 border-2 border-white dark:border-slate-900 shadow transition-colors" />
       </div>
       {dirs.map((d) => {
-        const isAmb = d === ambulanceDir;
+        const isAmb = ambulanceDir !== null && d === ambulanceDir;
         return (
           <div key={d} className={`absolute ${positions[d]} flex flex-col items-center`}>
             {isAmb ? (
@@ -463,6 +462,7 @@ export default function IntersectionPage() {
   const params = useParams();
   const router = useRouter();
   const [showAmbulanceModal, setShowAmbulanceModal] = useState(false);
+  const [ambulanceDetectedDir, setAmbulanceDetectedDir] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastData | null>(null);
 
   // Lane states
@@ -596,6 +596,15 @@ export default function IntersectionPage() {
         
         setEvpCount(data.critical_events?.evp_overrides || 0);
         setLiveStatus(data.status || "Green");
+
+        // Ambulance detection from real edge data (ITO only = 284501)
+        if (intersection.nodeId === "284501" && data.state_snapshot?.ambulance_detected) {
+          // Map the ambulance lane suffix to cam ID
+          const ambLane = data.state_snapshot.ambulance_lane || "01";
+          setAmbulanceDetectedDir(ambLane);
+        } else {
+          setAmbulanceDetectedDir(null);
+        }
 
       } catch (err) {
         console.error(err);
@@ -851,14 +860,16 @@ export default function IntersectionPage() {
                   </div>
                 </div>
                 <div className="flex flex-col items-center gap-2.5">
-                  <EmergencyCompass onAmbulanceClick={() => setShowAmbulanceModal(true)} />
-                  <button
-                    onClick={() => setShowAmbulanceModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-500/30 rounded-lg text-red-600 dark:text-red-400 text-[10px] font-bold uppercase tracking-wider hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors animate-pulse shadow-sm"
-                  >
-                    <Siren className="w-3 h-3" />
-                    Ambulance Detected
-                  </button>
+                  <EmergencyCompass ambulanceDir={ambulanceDetectedDir} onAmbulanceClick={() => setShowAmbulanceModal(true)} />
+                  {ambulanceDetectedDir && (
+                    <button
+                      onClick={() => setShowAmbulanceModal(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-500/30 rounded-lg text-red-600 dark:text-red-400 text-[10px] font-bold uppercase tracking-wider hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors animate-pulse shadow-sm"
+                    >
+                      <Siren className="w-3 h-3" />
+                      Ambulance Detected — CAM {ambulanceDetectedDir}
+                    </button>
+                  )}
                 </div>
               </div>
             </section>

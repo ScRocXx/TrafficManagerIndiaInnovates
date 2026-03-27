@@ -1,22 +1,15 @@
-"use client";
-import { useState, useEffect, useMemo } from "react";
-import { intersections, IntersectionData } from "@/lib/intersections";
+import { useState, useEffect, useRef } from 'react';
+import { IntersectionData } from '@/lib/intersections';
 
-/* ── Types ── */
-export interface LaneData {
-  density: number;
-  wait_time: number;
-}
-
-export interface NodeData {
+export interface NetworkNode {
   node_id: string;
+  lanes: {
+    [key: string]: { density: number; wait_time: number; green_time?: number };
+  };
   hardware_status: string;
-  lanes: Record<string, LaneData>;
-}
-
-export interface EnrichedIntersection extends IntersectionData {
-  status: "Red" | "Yellow" | "Green";
-  p: number;
+  ambulance_detected?: boolean;
+  active_green?: string | null;
+  green_timer?: number;
 }
 
 export interface DeviceStatus {
@@ -31,245 +24,291 @@ export interface DeviceStatus {
   issues: string[];
 }
 
-export interface VulnerabilityData {
-  id: string;
-  type: string;
-  status: string;
-  last_ping: string;
-  issue: string;
-  location: string;
+const DEMO_VIDEOS = [
+  "1EiC9bvVGnk", "B0Yjtbb02ZA", "1R_A_rO_F0E",
+  "qGltj0wJ8zM", "rM2wQ5kFiyM", "8mBJUCEtk_k",
+];
+
+// ── 25 real Delhi intersections (matches intersections.ts) ──
+const DELHI_INTERSECTIONS = [
+  { name: "ITO Junction",      lat: 28.6271, lng: 77.2403 },
+  { name: "AIIMS",             lat: 28.5675, lng: 77.2069 },
+  { name: "Connaught Place",   lat: 28.6304, lng: 77.2177 },
+  { name: "South Ext",         lat: 28.5685, lng: 77.2215 },
+  { name: "Dhaula Kuan",       lat: 28.5918, lng: 77.1615 },
+  { name: "Kashmere Gate",     lat: 28.6665, lng: 77.2289 },
+  { name: "Ashram Chowk",      lat: 28.5724, lng: 77.2600 },
+  { name: "Laxmi Nagar",       lat: 28.6300, lng: 77.2764 },
+  { name: "Karol Bagh",        lat: 28.6429, lng: 77.1901 },
+  { name: "Moolchand",         lat: 28.5645, lng: 77.2340 },
+  { name: "Raja Garden",       lat: 28.6433, lng: 77.1207 },
+  { name: "Akshardham",        lat: 28.6186, lng: 77.2769 },
+  { name: "Lajpat Nagar",      lat: 28.5682, lng: 77.2433 },
+  { name: "Dwarka",            lat: 28.5823, lng: 77.0500 },
+  { name: "Rohini",            lat: 28.7366, lng: 77.1268 },
+  { name: "Vasant Kunj",       lat: 28.5293, lng: 77.1537 },
+  { name: "Saket",             lat: 28.5245, lng: 77.2066 },
+  { name: "Nehru Place",       lat: 28.5494, lng: 77.2523 },
+  { name: "Hauz Khas",         lat: 28.5494, lng: 77.2001 },
+  { name: "Chandni Chowk",     lat: 28.6505, lng: 77.2303 },
+  { name: "Pitampura",         lat: 28.7031, lng: 77.1326 },
+  { name: "Janakpuri",         lat: 28.6219, lng: 77.0878 },
+  { name: "Okhla",             lat: 28.5222, lng: 77.2806 },
+  { name: "Vasant Vihar",      lat: 28.5585, lng: 77.1585 },
+  { name: "Greater Kailash",   lat: 28.5367, lng: 77.2407 },
+];
+
+// ── Deterministic seed data for stable rendering ──
+// Densities: realistic range 18–88% (major junctions higher)
+const SEED_DENSITIES = [
+  85, 82, 62, 48, 55, 68, 71, 44, 49, 58,
+  27, 66, 53, 32, 38, 29, 45, 61, 42, 76,
+  35, 30, 52, 33, 41,
+];
+
+// Wait times in seconds: realistic 8–38s (under 40 min cap)
+const SEED_WAIT_TIMES = [
+  35, 32, 26, 18, 22, 28, 30, 19, 21, 25,
+  12, 27, 23, 14, 16, 11, 20, 24, 17, 33,
+  13, 10, 22, 15, 18,
+];
+
+// Peak hours per intersection — realistic Delhi traffic patterns
+export const PEAK_TIMES = [
+  "9:00 AM",  // ITO - office rush
+  "6:00 PM",  // AIIMS - hospital + evening
+  "1:00 PM",  // CP - lunch crowd
+  "6:30 PM",  // South Ext - evening market
+  "8:30 AM",  // Dhaula Kuan - morning commute
+  "5:30 PM",  // Kashmere Gate - bus terminal rush
+  "9:30 AM",  // Ashram Chowk - office
+  "8:00 AM",  // Laxmi Nagar - morning
+  "7:00 PM",  // Karol Bagh - market close
+  "5:00 PM",  // Moolchand - evening
+  "8:00 AM",  // Raja Garden - school+office
+  "6:00 PM",  // Akshardham - evening
+  "7:30 PM",  // Lajpat Nagar - market
+  "9:00 AM",  // Dwarka - office exodus
+  "8:30 AM",  // Rohini - morning
+  "6:00 PM",  // Vasant Kunj - evening
+  "7:00 PM",  // Saket - mall crowd
+  "5:30 PM",  // Nehru Place - IT hub close
+  "8:00 PM",  // Hauz Khas - nightlife
+  "10:00 AM", // Chandni Chowk - market
+  "8:00 AM",  // Pitampura - morning
+  "9:00 AM",  // Janakpuri - office
+  "6:30 PM",  // Okhla - industrial close
+  "5:00 PM",  // Vasant Vihar - evening
+  "6:00 PM",  // Greater Kailash - market
+];
+
+// Max congestion durations in minutes (capped at 25-38 min range)
+export const MAX_CONGESTION_MINS = [
+  38, 35, 28, 25, 27, 32, 33, 26, 27, 30,
+  25, 31, 29, 25, 26, 25, 28, 30, 26, 36,
+  25, 25, 29, 25, 27,
+];
+
+/**
+ * Generates deterministic fallback nodes. Hardware faults rotate every ~60s
+ * so at any given minute, exactly 1 node has a vulnerability.
+ */
+function generateFallbackNodes(): NetworkNode[] {
+  return DELHI_INTERSECTIONS.map((_, i) => ({
+    node_id: `Node_${i + 1}`,
+    hardware_status: "ONLINE",
+    lanes: {
+      N: { density: SEED_DENSITIES[i], wait_time: SEED_WAIT_TIMES[i] },
+    },
+  }));
 }
 
-/* ── Deterministic device simulation ── */
-const DEVICE_TYPES: ("camera" | "sensor" | "controller")[] = ["camera", "sensor", "controller"];
-const DEVICE_NAMES: Record<string, string[]> = {
-  camera: ["PTZ Camera Alpha", "Fixed Camera C1", "Thermal Camera T1", "PTZ Camera Beta", "Wide-Angle Cam W1"],
-  sensor: ["Inductive Loop Sensor", "Radar Detector R1", "Piezoelectric Sensor", "LiDAR Scanner L1", "Microwave Sensor M1"],
-  controller: ["Signal Controller Unit", "Edge Controller EC1", "Relay Controller RC1", "Phase Timer PT1", "Traffic Signal TSU"],
-};
-const FIRMWARE_VERSIONS = ["v3.2.1", "v3.3.0", "v4.0.0", "v5.0.1", "v5.1.0", "v2.4.2", "v2.1.0", "v1.9.8"];
-const POSSIBLE_ISSUES: Record<string, string[]> = {
-  offline: ["Connection timeout", "Power supply unstable", "Hardware replacement needed", "Inductive loop failure"],
-  degraded: ["High latency", "Network congestion detected", "Intermittent signal loss", "Phase timing desync", "Thermal throttling"],
-  online: [],
-};
+/**
+ * Processes NetworkNodes into IntersectionData[], DeviceStatus[], vulnerabilities.
+ */
+function processNodes(networkNodes: NetworkNode[], alertTime: string) {
+  const newIntersections: IntersectionData[] = networkNodes.map((n, i) => {
+    const totalDensity = Object.values(n.lanes).reduce((sum, l) => sum + l.density, 0);
+    const pValue = Math.min(1.0, totalDensity / 100);
 
-function generateDevicesForIntersections(tick: number): DeviceStatus[] {
-  const allDevices: DeviceStatus[] = [];
-  intersections.forEach((intersection, idx) => {
-    const seed = parseInt(intersection.nodeId.slice(-3)) || 100;
-    // Each intersection gets 2-3 devices
-    const numDevices = 2 + (seed % 2);
-    for (let d = 0; d < numDevices; d++) {
-      const typeIdx = (seed + d) % 3;
-      const type = DEVICE_TYPES[typeIdx];
-      const namePool = DEVICE_NAMES[type];
-      const deviceName = namePool[(seed + d) % namePool.length];
-      const prefix = type === "camera" ? "CAM" : type === "sensor" ? "SEN" : "CTR";
-      const deviceId = `${prefix}-${String(idx * 3 + d + 1).padStart(3, "0")}`;
+    let status = 'Green';
+    if (pValue > 0.70) status = 'Red';
+    else if (pValue > 0.40) status = 'Yellow';
 
-      // Time-varying status: mix tick into seed — keep faults LOW (~5%) for demo
-      const statusSeed = (seed + d * 7 + tick * 3) % 30;
-      const status: "online" | "offline" | "degraded" =
-        statusSeed < 1 ? "offline" : statusSeed < 3 ? "degraded" : "online";
+    const coords = DELHI_INTERSECTIONS[i] || DELHI_INTERSECTIONS[0];
 
-      const issues = status === "online" ? [] :
-        POSSIBLE_ISSUES[status].filter((_, i) => (seed + d + i + tick) % 3 === 0).slice(0, 2);
+    return {
+      id: i + 1,
+      nodeId: n.node_id.replace("Node_", "2845").padStart(6, "0"),
+      name: i === 0 ? "ITO Junction (Hero)" : (i === 1 ? "AIIMS (Hero)" : coords.name),
+      lat: coords.lat,
+      lng: coords.lng,
+      videoId: DEMO_VIDEOS[i % DEMO_VIDEOS.length],
+      status,
+      p: Number(pValue.toFixed(2)),
+    };
+  });
 
-      // Dynamic absolute "last ping"
-      const now = Date.now();
-      const offlineMin = 5 + ((seed + tick) % 40);
-      const degradedMin = 1 + ((seed + tick) % 14);
-      const onlineSec = ((tick * 2 + seed) % 8) + 1;
-      
-      const pingTime = new Date(now - (status === "offline" ? offlineMin * 60000 : status === "degraded" ? degradedMin * 60000 : onlineSec * 1000));
-      const lastPingTime = pingTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const newDevices: DeviceStatus[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const newVulns: any[] = [];
 
-      allDevices.push({
-        id: deviceId,
-        device: deviceName,
-        type,
-        location: intersection.name,
-        status,
-        uptime: status === "offline" ? "0%" : status === "degraded" ? `${72 + (seed % 20)}%` : `${96 + (seed % 4)}.${seed % 10}%`,
-        lastPing: lastPingTime,
-        firmware: FIRMWARE_VERSIONS[(seed + d) % FIRMWARE_VERSIONS.length],
-        issues,
+  networkNodes.forEach((n, index) => {
+    const isOnline = n.hardware_status === 'ONLINE';
+    const statusMap: Record<string, "online" | "offline" | "degraded"> = {
+      "ONLINE": "online",
+      "CAMERA_FAULT": "offline",
+      "THERMAL_THROTTLE": "degraded",
+    };
+
+    const deviceId = `CAM-${n.node_id}`;
+    const devStatus = statusMap[n.hardware_status] || "online";
+    const coords = DELHI_INTERSECTIONS[index] || DELHI_INTERSECTIONS[0];
+    const locName = index === 0 ? "ITO Junction (Hero)" : (index === 1 ? "AIIMS (Hero)" : coords.name);
+
+    // Each Jetson has 5 YOLOs
+    const jetsonId = `JTN-${String(index + 1).padStart(2, "0")}`;
+    newDevices.push({
+      id: deviceId,
+      device: `${jetsonId} · 5× YOLO`,
+      type: "camera",
+      location: locName,
+      status: devStatus,
+      uptime: isOnline ? "99.9%" : (devStatus === "degraded" ? "72.4%" : "0%"),
+      lastPing: isOnline ? "1 sec ago" : (devStatus === "degraded" ? "3 min ago" : "15 min ago"),
+      firmware: "v6.0.0",
+      issues: isOnline ? [] : [n.hardware_status.replace("_", " ")],
+    });
+
+    if (!isOnline) {
+      newVulns.push({
+        id: `VULN-${n.node_id}`,
+        type: n.hardware_status === 'CAMERA_FAULT' ? "Camera Offline" : "Thermal Throttling",
+        status: n.hardware_status === 'CAMERA_FAULT' ? "Critical" : "Yellow",
+        last_ping: alertTime,
+        issue: `Node reported ${n.hardware_status}`,
+        location: locName,
       });
     }
   });
-  return allDevices;
+
+  return { newIntersections, newDevices, newVulns };
 }
 
-function generateVulnerabilities(devices: DeviceStatus[]): VulnerabilityData[] {
-  return devices
-    .filter(d => d.status === "offline" || (d.status === "degraded" && d.issues.length > 0))
-    .map(d => ({
-      id: d.id,
-      type: d.type === "camera" ? "Camera Fault" : d.type === "sensor" ? "Sensor Fault" : "Controller Fault",
-      status: d.status === "offline" ? "Critical" : "Warning",
-      last_ping: d.lastPing,
-      issue: d.issues[0] || "Unknown issue",
-      location: d.location,
-    }));
-}
-
-/* ── Hook ── */
 export function useNetworkStatus() {
-  const [nodes, setNodes] = useState<(NodeData | null)[]>([]);
-  const [liveTraffic, setLiveTraffic] = useState<Record<string, { status: string; congestionLevel: number; vehiclesPassed: number }>>({});
-  const [liveDevices, setLiveDevices] = useState<DeviceStatus[]>([]);
-  const [tick, setTick] = useState(0);
+  const [nodes, setNodes] = useState<NetworkNode[]>([]);
+  const [intersections, setIntersections] = useState<IntersectionData[]>([]);
+  const [devices, setDevices] = useState<DeviceStatus[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [vulnerabilities, setVulnerabilities] = useState<any[]>([]);
+  // Track whether we got real API data (so we don't overwrite with fallback)
+  const hasLiveData = useRef(false);
 
-  // Device simulation ticker — shifts statuses every 8 seconds
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 8000);
-    return () => clearInterval(interval);
-  }, []);
+    let isMounted = true;
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+    const fetchStatus = async () => {
+      let networkNodes: NetworkNode[] | null = null;
 
-  // Fetch simulated network status for ALL nodes (from simulation backend)
-  useEffect(() => {
-    const fetchNetworkStatus = async () => {
+      // 1. Try configured backend
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
       try {
-        const res = await fetch(`${API_URL}/api/network-status`);
-        if (res.ok) {
+        const res = await fetch(`${API_URL}/api/network-status`, { signal: AbortSignal.timeout(4000) });
+        const data = await res.json();
+        if (data.status === 'success' && data.nodes) {
+          networkNodes = data.nodes;
+          hasLiveData.current = true;
+        }
+      } catch {
+        // Primary unreachable
+      }
+
+      // 2. Try localhost
+      if (!networkNodes) {
+        try {
+          const res = await fetch('http://localhost:8000/api/network-status', { signal: AbortSignal.timeout(3000) });
           const data = await res.json();
-          if (data.nodes) {
-            setNodes(data.nodes);
+          if (data.status === 'success' && data.nodes) {
+            networkNodes = data.nodes;
+            hasLiveData.current = true;
+          }
+        } catch {
+          // Localhost also unreachable
+        }
+      }
+
+      // Poll interval: stable data doesn't bounce around
+      if (!networkNodes || networkNodes.length === 0) {
+        networkNodes = generateFallbackNodes();
+      }
+
+      // --- ENFORCE EXACTLY 1 VULNERABILITY EVERY 1.5 MIN (90s) ---
+      const timeSlot = Math.floor(Date.now() / 90000);
+      const alertTime = new Date(timeSlot * 90000).toISOString();
+      const faultNodeIndex = timeSlot % 25;
+      const faultType = timeSlot % 2 === 0 ? "CAMERA_FAULT" : "THERMAL_THROTTLE";
+
+      // Pad to 25 nodes if API returned fewer
+      while (networkNodes.length < 25) {
+        const i = networkNodes.length;
+        networkNodes.push({
+          node_id: `Node_${i + 1}`,
+          hardware_status: "ONLINE",
+          lanes: {
+            N: { density: SEED_DENSITIES[i] || 30, wait_time: SEED_WAIT_TIMES[i] || 15 },
+          },
+        });
+      }
+
+      // Overwrite statuses: force exactly 1 node to have the vulnerability
+      networkNodes = networkNodes.map((n, i) => ({
+        ...n,
+        hardware_status: i === faultNodeIndex ? faultType : "ONLINE"
+      }));
+
+      if (!isMounted) return;
+
+      // 4. Try merging real edge data for ITO (Node 1) from DB
+      try {
+        const trafficRes = await fetch(`${API_URL}/api/traffic`, { signal: AbortSignal.timeout(4000) });
+        if (trafficRes.ok) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const trafficData: any[] = await trafficRes.json();
+          if (trafficData.length > 0 && networkNodes[0]) {
+            const heroMatch = trafficData[0];
+            const realDensity = Math.round((heroMatch.congestionLevel || 0) * 100);
+            networkNodes[0] = {
+              ...networkNodes[0],
+              lanes: {
+                ...networkNodes[0].lanes,
+                N: {
+                  density: Math.max(realDensity, networkNodes[0].lanes.N?.density || 0),
+                  wait_time: heroMatch.avgWaitTime || networkNodes[0].lanes.N?.wait_time || 30,
+                },
+              },
+            };
           }
         }
       } catch {
-        // Silently fallback — generate deterministic mock nodes
-        const mockNodes: NodeData[] = intersections.map((item, idx) => {
-          const seed = parseInt(item.nodeId.slice(-3)) || 100;
-          const density = (seed % 10 < 2) ? 75 + (seed % 15) : (seed % 10 < 5) ? 45 + (seed % 20) : 15 + (seed % 25);
-          return {
-            node_id: `Node_${idx + 1}`,
-            hardware_status: "ONLINE",
-            lanes: {
-              N: { density, wait_time: Math.floor(10 + (seed % 40)) },
-              S: { density: Math.max(10, density - 10), wait_time: Math.floor(10 + (seed % 30)) },
-              E: { density: Math.max(10, density + 5), wait_time: Math.floor(15 + (seed % 35)) },
-              W: { density: Math.max(10, density - 5), wait_time: Math.floor(12 + (seed % 25)) },
-            }
-          };
-        });
-        setNodes(mockNodes);
+        // No real traffic data
       }
+
+      setNodes(networkNodes);
+      const { newIntersections, newDevices, newVulns } = processNodes(networkNodes, alertTime);
+      setIntersections(newIntersections);
+      setDevices(newDevices);
+      setVulnerabilities(newVulns);
     };
-    fetchNetworkStatus();
-    const interval = setInterval(fetchNetworkStatus, 5000);
-    return () => clearInterval(interval);
-  }, [API_URL]);
 
-  // Fetch real DB traffic data for intersections with live Jetson data
-  useEffect(() => {
-    const fetchLive = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/traffic`);
-        if (res.ok) {
-          const data = await res.json();
-          const statusMap: Record<string, { status: string; congestionLevel: number; vehiclesPassed: number }> = {};
-          /* eslint-disable @typescript-eslint/no-explicit-any */
-          data.forEach((d: any) => {
-            statusMap[d.nodeId] = {
-              status: d.status || "Green",
-              congestionLevel: d.congestionLevel || 0,
-              vehiclesPassed: d.vehiclesPassed || 0,
-            };
-          });
-          setLiveTraffic(statusMap);
-        }
-      } catch {
-        // Silently fallback
-      }
+    fetchStatus();
+    // Poll every 5s to keep UI snappy, but the alert data is stable during the 90s window
+    const intervalId = setInterval(fetchStatus, 5000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
     };
-    fetchLive();
-    const interval = setInterval(fetchLive, 5000);
-    return () => clearInterval(interval);
-  }, [API_URL]);
+  }, []);
 
-  // Fetch live device health data from DB, merge with simulated
-  useEffect(() => {
-    const fetchDevices = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/devices`);
-        if (res.ok) {
-          const data: any[] = await res.json();
-          // Convert backend device format to DeviceStatus
-          const live: DeviceStatus[] = data.map((d: any) => ({
-            id: d.id,
-            device: d.id, // Use ID as name if no name field
-            type: (d.type || "controller") as "camera" | "sensor" | "controller",
-            location: "Live Node",
-            status: d.status as "online" | "offline" | "degraded",
-            uptime: d.uptime || "N/A",
-            lastPing: d.lastPing || "N/A",
-            firmware: d.firmware || "unknown",
-            issues: d.issues || [],
-          }));
-          setLiveDevices(live);
-        }
-      } catch {
-        // Silently fallback to simulated only
-      }
-    };
-    fetchDevices();
-    const interval = setInterval(fetchDevices, 10000);
-    return () => clearInterval(interval);
-  }, [API_URL]);
-
-  // Enriched intersection data: merge live DB data with simulation fallback
-  const enrichedIntersections: EnrichedIntersection[] = useMemo(() => {
-    return intersections.map((item, idx) => {
-      const live = liveTraffic[item.nodeId];
-      const node = nodes[idx] || null;
-
-      let status: "Red" | "Yellow" | "Green";
-      let p: number;
-
-      if (live) {
-        // Real DB data takes priority
-        status = live.status as "Red" | "Yellow" | "Green";
-        p = live.congestionLevel;
-      } else if (node) {
-        // Use simulated network-status data
-        const laneDensities = Object.values(node.lanes).map(l => l.density);
-        const avgDensity = laneDensities.reduce((a, b) => a + b, 0) / (laneDensities.length || 1);
-        p = avgDensity / 100;
-        status = avgDensity > 70 ? "Red" : avgDensity > 40 ? "Yellow" : "Green";
-      } else {
-        // Final deterministic fallback
-        const seed = parseInt(item.nodeId.slice(-3)) || 100;
-        status = (seed % 10 < 2) ? "Red" : (seed % 10 < 5) ? "Yellow" : "Green";
-        p = status === "Red" ? 0.78 : status === "Yellow" ? 0.48 : 0.15;
-      }
-
-      return { ...item, status, p };
-    });
-  }, [nodes, liveTraffic]);
-
-  // Merge simulated devices with live DB devices (re-generates every 8s tick)
-  const devices: DeviceStatus[] = useMemo(() => {
-    const simulated = generateDevicesForIntersections(tick);
-    if (liveDevices.length === 0) return simulated;
-
-    // Merge: live devices override simulated ones by ID
-    const liveMap = new Map(liveDevices.map(d => [d.id, d]));
-    return simulated.map(dev => {
-      const live = liveMap.get(dev.id);
-      if (live) {
-        return { ...dev, status: live.status, firmware: live.firmware, issues: live.issues, lastPing: live.lastPing, uptime: live.uptime };
-      }
-      return dev;
-    });
-  }, [liveDevices, tick]);
-
-  const vulnerabilities: VulnerabilityData[] = useMemo(() => {
-    return generateVulnerabilities(devices);
-  }, [devices]);
-
-  return { nodes, intersections: enrichedIntersections, liveTraffic, devices, vulnerabilities };
+  return { nodes, intersections, devices, vulnerabilities };
 }
