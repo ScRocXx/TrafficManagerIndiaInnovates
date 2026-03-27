@@ -726,27 +726,6 @@ export default function IntersectionPage() {
         return n;
       });
 
-      // Auto-transition to YELLOW on frontend when green timer <= 4s
-      setLaneStates(prevStates => {
-         let changed = false;
-         const newStates = { ...prevStates };
-         for (const dir in newStates) {
-            if (newStates[dir] === "GRN") {
-               const startTime = lanePhaseStartTimes.current[dir];
-               const duration = laneInitialDurations.current[dir];
-               if (startTime && duration !== undefined) {
-                  const elapsedSec = (Date.now() - startTime) / 1000;
-                  const remaining = duration - elapsedSec;
-                  if (remaining <= 4) {
-                     newStates[dir] = "YEL"; 
-                     changed = true;
-                  }
-               }
-            }
-         }
-         return changed ? newStates : prevStates;
-      });
-
       // Wait timers: tick UP for RED lanes (accumulating wait time), reset for GREEN
       setLaneWaitTimers(prev => {
         const n: Record<string, number> = { ...prev };
