@@ -690,11 +690,6 @@ export default function IntersectionPage() {
           const laneSuffix = laneId.split("-").pop() || "01";
           setAmbulanceDetectedDir(laneSuffix);
           setAmbulanceAlertData(data.alert);
-
-          // Only auto-open the modal ONCE. After user dismisses, never re-open until alert fully clears.
-          if (!ambulanceDismissedRef.current) {
-            setShowAmbulanceModal(true);
-          }
         } else {
           setAmbulanceDetectedDir(null);
           setAmbulanceAlertData(null);
@@ -947,11 +942,19 @@ export default function IntersectionPage() {
               <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">Node NB-{intersection.nodeId} · Command Center</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full  ${systemMode === "LEGACY_MICROCONTROLLER" ? "bg-red-500 animate-ping ring-4 ring-red-500/20" : "animate-pulse"} ${liveStatus === "Red" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : liveStatus === "Yellow" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`} />
-            <span className={`text-xs font-bold uppercase tracking-wider ${systemMode === "LEGACY_MICROCONTROLLER" ? "text-red-600 dark:text-red-400" : (liveStatus === "Red" ? "text-red-600 dark:text-red-400" : liveStatus === "Yellow" ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400")}`}>
-              {systemMode === "LEGACY_MICROCONTROLLER" ? "Faulted / Fallback" : (liveStatus === "Red" ? "Critical" : liveStatus === "Yellow" ? "Moderate" : "Normal")}
-            </span>
+          <div className="flex items-center gap-3">
+            {ambulanceDetectedDir && (
+                <div onClick={() => setShowAmbulanceModal(true)} className="flex items-center gap-2 cursor-pointer bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-500/50 px-3 py-1.5 rounded-lg animate-pulse shadow-sm transition-transform hover:scale-105">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.8)]" />
+                  <span className="text-xs font-bold text-red-700 dark:text-red-400 uppercase tracking-widest">Ambulance Overriding Lane {ambulanceDetectedDir}</span>
+                </div>
+            )}
+            <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-950/50 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-800">
+              <span className={`w-2.5 h-2.5 rounded-full  ${systemMode === "LEGACY_MICROCONTROLLER" ? "bg-red-500 animate-ping ring-4 ring-red-500/20" : "animate-pulse"} ${liveStatus === "Red" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : liveStatus === "Yellow" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`} />
+              <span className={`text-xs font-bold uppercase tracking-wider ${systemMode === "LEGACY_MICROCONTROLLER" ? "text-red-600 dark:text-red-400" : (liveStatus === "Red" ? "text-red-600 dark:text-red-400" : liveStatus === "Yellow" ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400")}`}>
+                {systemMode === "LEGACY_MICROCONTROLLER" ? "Faulted / Fallback" : (liveStatus === "Red" ? "Critical" : liveStatus === "Yellow" ? "Moderate" : "Normal")}
+              </span>
+            </div>
           </div>
         </div>
 
