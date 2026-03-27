@@ -64,7 +64,7 @@ function CameraFeed({ lane, currentSignal, videoId, streamActive, isFallback = f
       <div
         className={`relative aspect-video bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden transition-shadow duration-300 group ${
           isFallback
-            ? "ring-2 ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.4)]"
+            ? "ring-2 ring-slate-300 dark:ring-slate-700 shadow-none opacity-80"
             : isGreen
               ? "ring-2 ring-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]"
               : isYellow ? "ring-2 ring-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.4)]"
@@ -105,10 +105,12 @@ function CameraFeed({ lane, currentSignal, videoId, streamActive, isFallback = f
           <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isGreen ? "bg-green-500" : isYellow ? "bg-amber-400" : "bg-red-500"}`} />
           <span className="text-[9px] text-white/90 font-mono uppercase tracking-wider">{lane.direction} CAM</span>
         </div>
-        <div className="absolute top-2.5 right-2.5 z-10">
-          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${isGreen ? "bg-green-500/20 text-green-400 border border-green-500/30" : isYellow ? "bg-amber-500/20 text-amber-500 border border-amber-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"
-            }`}>{signalLabel}</span>
-        </div>
+        {!isFallback && (
+          <div className="absolute top-2.5 right-2.5 z-10">
+            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${isGreen ? "bg-green-500/20 text-green-400 border border-green-500/30" : isYellow ? "bg-amber-500/20 text-amber-500 border border-amber-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"
+              }`}>{signalLabel}</span>
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-3 gap-2 mt-2">
         {[
