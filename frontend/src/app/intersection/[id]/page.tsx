@@ -110,15 +110,21 @@ function CameraFeed({ lane, currentSignal, videoId, streamActive, isFallback = f
             }`}>{signalLabel}</span>
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-1.5 mt-2">
+      <div className="grid grid-cols-3 gap-2 mt-2">
         {[
           { label: "Density", value: lane.density },
           { label: "Wait", value: lane.waitTime },
           { label: "Green", value: lane.greenTime },
         ].map((s) => (
-          <div key={s.label} className="bg-gray-50 dark:bg-slate-800/50 rounded-lg px-2 py-1.5 border border-gray-100 dark:border-slate-700/50 text-center transition-colors">
-            <p className="text-[8px] text-gray-400 dark:text-slate-500 uppercase tracking-wider font-semibold">{s.label}</p>
-            <p className="text-xs font-bold text-gray-800 dark:text-slate-200">{s.value}</p>
+          <div key={s.label} className="bg-[#111827] dark:bg-[#0f172a] rounded-lg px-2 py-2 border border-slate-800 dark:border-slate-800/80 flex flex-col items-center justify-center text-center h-14 transition-colors">
+            <p className="text-[9px] text-slate-500 dark:text-slate-400 uppercase tracking-widest font-semibold mb-0.5">{s.label}</p>
+            {s.value.includes('Fault') ? (
+              <p className="text-[10px] font-bold text-white leading-tight">
+                N/A (Sensor<br/>Fault)
+              </p>
+            ) : (
+              <p className="text-xs font-bold text-white">{s.value}</p>
+            )}
           </div>
         ))}
       </div>
@@ -926,7 +932,7 @@ export default function IntersectionPage() {
             </div>
             <div className="flex items-center gap-2 bg-white/20 px-2 py-1 rounded border border-white/30">
                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-               <span className="text-[9px] font-bold">HARDCODED MODE</span>
+               <span className="text-[9px] font-bold">LAGECY MODE</span>
             </div>
           </div>
         )}
