@@ -32,6 +32,8 @@ app.add_middleware(
 
 # Global Stream Status
 STREAM_ACTIVE = False
+LAST_SEEN_NODES = {} # Tracks {node_id: datetime}
+AMBULANCE_ALERTS = {} # Tracks {node_id: alert_payload}
 
 # ─── GHOST NODE SIMULATION (23 simulated intersections) ─────────────────────
 GHOST_NODE_NAMES = [
@@ -132,18 +134,34 @@ MQTT_PORT = 1883
 MQTT_TOPIC = "mcd/traffic/#"
 
 def on_mqtt_connect(client, userdata, flags, reason_code, properties):
-    print(f"[{datetime.datetime.utcnow().isoformat()}] Connected to HiveMQ Broker! Listening on {MQTT_TOPIC}")
-    client.subscribe(MQTT_TOPIC)
+    print(f"[{datetime.datetime.utcnow().isoformat()}] Connected to HiveMQ Broker!")
+    client.subscribe("mcd/traffic/#")
+    client.subscribe("mcd/alerts/#")
+    print(f"[{datetime.datetime.utcnow().isoformat()}] Subscribed to mcd/traffic/# and mcd/alerts/#")
 
 def on_mqtt_message(client, userdata, msg):
-    global STREAM_ACTIVE
+    global STREAM_ACTIVE, LAST_SEEN_NODES, AMBULANCE_ALERTS
     try:
+        topic = msg.topic
         payload_str = msg.payload.decode("utf-8")
         raw_data = json.loads(payload_str)
+
+        # --- Dedicated Ambulance Alert Handler (separate from traffic) ---
+        if topic.startswith("mcd/alerts/"):
+            device_id = raw_data.get("deviceId")
+            if device_id:
+                AMBULANCE_ALERTS[device_id] = {
+                    **raw_data,
+                    "received_at": datetime.datetime.utcnow().isoformat()
+                }
+                print(f"[{datetime.datetime.utcnow().isoformat()}] EVP ALERT RECEIVED: {raw_data.get('alert_type')} for node {device_id}")
+            return  # Do NOT process further — this is not traffic data
         
         node_id = raw_data.get("nodeId")
         if not node_id:
             return
+            
+        LAST_SEEN_NODES[node_id] = datetime.datetime.utcnow()
             
         # First payload received, trigger the global video stream
         if not STREAM_ACTIVE:
@@ -253,7 +271,9 @@ def ingest_traffic(data: TrafficPayload, db: Session = Depends(database.get_db))
     Endpoint for Jetson devices to send real-time traffic inference results.
     Saves the metrics to PostgreSQL.
     """
-    global STREAM_ACTIVE
+    global STREAM_ACTIVE, LAST_SEEN_NODES
+    LAST_SEEN_NODES[data.nodeId] = datetime.datetime.utcnow()
+    
     if not STREAM_ACTIVE:
         STREAM_ACTIVE = True
         print(f"[{datetime.datetime.utcnow().isoformat()}] FIRST HTTP PAYLOAD TRIGGER: STREAM_ACTIVE = True")
@@ -337,12 +357,26 @@ def get_latest_traffic(db: Session = Depends(database.get_db)):
             # (which ranges from 2000 to 14000 in the static data)
             vehicles_passed = max(1200, estimated_volume * 15) # Scale up to match dashboard norms
 
+            # Check node health
+            last_seen = LAST_SEEN_NODES.get(m.node_id)
+            is_offline = False
+            if last_seen:
+                seconds_since = (datetime.datetime.utcnow() - last_seen).total_seconds()
+                if seconds_since > 20: # 20 second timeout
+                    is_offline = True
+            
+            # Status calculation
+            base_status = "Red" if gridlock_p > 0.6 else "Yellow" if gridlock_p > 0.3 else "Green"
+            if is_offline:
+                base_status = "FAULT_OFFLINE"
+
             frontend_traffic.append({
                 "nodeId": m.node_id,
                 "vehiclesPassed": vehicles_passed,
-                "status": "Red" if gridlock_p > 0.6 else "Yellow" if gridlock_p > 0.3 else "Green",
+                "status": base_status,
                 "congestionLevel": gridlock_p,
-                "avgWaitTime": int(avg_wait)
+                "avgWaitTime": int(avg_wait),
+                "systemMode": "LEGACY_MICROCONTROLLER" if is_offline else "AI_OPTIMIZED"
             })
     return frontend_traffic
 
@@ -385,27 +419,98 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
     """Returns the raw detailed metric payload for a specific intersection"""
     record = db.query(models.TrafficMetricsRecord).filter(models.TrafficMetricsRecord.node_id == node_id).order_by(models.TrafficMetricsRecord.timestamp.desc()).first()
     if not record:
-        # Return empty skeleton so the frontend doesn't break while waiting for first MQTT packet
+        import hashlib
+        # deterministic random seed based on node_id so each node is a bit different
+        seed = int(hashlib.md5(node_id.encode()).hexdigest(), 16)
+        
+        # 136 second cycle (34s per phase)
+        now = int(datetime.datetime.utcnow().timestamp())
+        cycle_time = (now + seed) % 136
+        
+        # Phase 01: 0-34s. Phase 02: 34-68s. Phase 03: 68-102s. Phase 04: 102-136s
+        phase_idx = cycle_time // 34
+        active_phase = f"{node_id}-0{phase_idx + 1}"
+        
+        # Inside the 34s phase, first 30s is GREEN, last 4s is YELLOW
+        phase_sec = cycle_time % 34
+        engine_state = "BASE_GREEN" if phase_sec < 30 else "YELLOW_HANDOVER"
+        
+        # Generate some deterministic but realistic-looking queue numbers based on cycle time
+        lane_metrics = {}
+        for i in range(1, 5):
+            lane_str = f"{node_id}-0{i}"
+            if i - 1 == phase_idx:
+                # Active lane: queue drains, exit flow is high, wait gets reset
+                q = max(0, 30 - phase_sec) 
+                w = 0
+            else:
+                # Inactive lane: queue builds up, wait increases
+                offset = (phase_idx - (i - 1)) % 4
+                time_waiting = (offset * 30) + phase_sec
+                q = int(time_waiting * 0.5) + (seed % 10)
+                w = time_waiting
+            lane_metrics[lane_str] = {"queue_N": q, "wait_time_T": w, "exit_flow": 5 if i-1 == phase_idx else 0}
+
         return {
             "nodeId": node_id,
             "timestamp": datetime.datetime.utcnow().isoformat(),
-            "state_snapshot": {"active_phase": f"{node_id}-01", "engine_state": "AWAITING_DATA", "box_gridlock_pct": 0.0},
-            "lane_metrics": {},
-            "critical_events": {"evp_overrides": 0, "gridlock_triggers": 0}
+            "state_snapshot": {
+                "active_phase": active_phase,
+                "engine_state": engine_state,
+                "green_timer": 34,
+                "total_green_elapsed": phase_sec,
+                "box_gridlock_pct": float((seed % 30) + 10.0),
+                "trigger": "STATE_TRANSITION"
+            },
+            "lane_metrics": lane_metrics,
+            "critical_events": {"evp_overrides": 0, "gridlock_triggers": 0},
+            "status": "ONLINE",
+            "systemMode": "AI_OPTIMIZED"
         }
     
+    is_offline = False
+    if record:
+        # Check if the actual data is stale (e.g. Jetson crashed and is re-sending a frozen payload)
+        seconds_since_record = (datetime.datetime.utcnow() - record.timestamp).total_seconds()
+        if seconds_since_record > 20:
+            is_offline = True
+
+    last_seen = LAST_SEEN_NODES.get(node_id)
+    if last_seen:
+        seconds_since = (datetime.datetime.utcnow() - last_seen).total_seconds()
+        if seconds_since > 20:
+            is_offline = True
+
     return {
         "nodeId": record.node_id,
         "timestamp": record.timestamp.isoformat(),
         "state_snapshot": record.state_snapshot,
         "lane_metrics": record.lane_metrics,
-        "critical_events": record.critical_events_this_minute
+        "critical_events": record.critical_events_this_minute,
+        "status": "FAULT_OFFLINE" if is_offline else "ONLINE",
+        "systemMode": "LEGACY_MICROCONTROLLER" if is_offline else "AI_OPTIMIZED",
     }
 
 @app.get("/api/stream-status")
 def get_stream_status():
     """Endpoint for frontend to poll if actual camera simulation data has started arriving"""
     return {"active": STREAM_ACTIVE}
+
+@app.get("/api/ambulance-alerts/{node_id}")
+def get_ambulance_alert(node_id: str):
+    """Dedicated endpoint for ambulance alerts — completely separate from /api/traffic"""
+    alert = AMBULANCE_ALERTS.get(node_id)
+    if alert:
+        return {"active": True, "alert": alert}
+    return {"active": False, "alert": None}
+
+@app.post("/api/ambulance-alerts/{node_id}/clear")
+def clear_ambulance_alert(node_id: str):
+    """Clear an ambulance alert after operator acknowledgement"""
+    if node_id in AMBULANCE_ALERTS:
+        del AMBULANCE_ALERTS[node_id]
+        print(f"[{datetime.datetime.utcnow().isoformat()}] EVP CLEAR: Alert cleared for node {node_id}")
+    return {"success": True}
 
 if __name__ == "__main__":
     import uvicorn

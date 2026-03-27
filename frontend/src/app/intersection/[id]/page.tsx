@@ -46,7 +46,7 @@ interface AuditEntry {
 }
 
 /* ── Camera Feed Placeholder ── */
-function CameraFeed({ lane, currentSignal, videoId, streamActive }: { lane: LaneData; currentSignal: "RED" | "YEL" | "GRN"; videoId: string; streamActive: boolean }) {
+function CameraFeed({ lane, currentSignal, videoId, streamActive, isFallback = false }: { lane: LaneData; currentSignal: "RED" | "YEL" | "GRN"; videoId: string; streamActive: boolean; isFallback?: boolean }) {
   const isGreen = currentSignal === "GRN";
   const isYellow = currentSignal === "YEL";
   const signalLabel = currentSignal === "GRN" ? "GREEN" : currentSignal === "YEL" ? "YELLOW" : "RED";
@@ -62,10 +62,13 @@ function CameraFeed({ lane, currentSignal, videoId, streamActive }: { lane: Lane
   return (
     <div className="flex flex-col">
       <div
-        className={`relative aspect-video bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden transition-shadow duration-300 group ${isGreen
-          ? "ring-2 ring-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]"
-          : isYellow ? "ring-2 ring-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.4)]"
-          : "ring-2 ring-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
+        className={`relative aspect-video bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden transition-shadow duration-300 group ${
+          isFallback
+            ? "ring-2 ring-slate-300 dark:ring-slate-700 shadow-none opacity-80"
+            : isGreen
+              ? "ring-2 ring-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]"
+              : isYellow ? "ring-2 ring-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.4)]"
+              : "ring-2 ring-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
           }`}
       >
         <YouTube
@@ -102,20 +105,28 @@ function CameraFeed({ lane, currentSignal, videoId, streamActive }: { lane: Lane
           <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isGreen ? "bg-green-500" : isYellow ? "bg-amber-400" : "bg-red-500"}`} />
           <span className="text-[9px] text-white/90 font-mono uppercase tracking-wider">{lane.direction} CAM</span>
         </div>
-        <div className="absolute top-2.5 right-2.5 z-10">
-          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${isGreen ? "bg-green-500/20 text-green-400 border border-green-500/30" : isYellow ? "bg-amber-500/20 text-amber-500 border border-amber-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"
-            }`}>{signalLabel}</span>
-        </div>
+        {!isFallback && (
+          <div className="absolute top-2.5 right-2.5 z-10">
+            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${isGreen ? "bg-green-500/20 text-green-400 border border-green-500/30" : isYellow ? "bg-amber-500/20 text-amber-500 border border-amber-500/30" : "bg-red-500/20 text-red-400 border border-red-500/30"
+              }`}>{signalLabel}</span>
+          </div>
+        )}
       </div>
-      <div className="grid grid-cols-3 gap-1.5 mt-2">
+      <div className="grid grid-cols-3 gap-2 mt-2">
         {[
           { label: "Density", value: lane.density },
           { label: "Wait", value: lane.waitTime },
           { label: "Green", value: lane.greenTime },
         ].map((s) => (
-          <div key={s.label} className="bg-gray-50 dark:bg-slate-800/50 rounded-lg px-2 py-1.5 border border-gray-100 dark:border-slate-700/50 text-center transition-colors">
-            <p className="text-[8px] text-gray-400 dark:text-slate-500 uppercase tracking-wider font-semibold">{s.label}</p>
-            <p className="text-xs font-bold text-gray-800 dark:text-slate-200">{s.value}</p>
+          <div key={s.label} className="bg-[#111827] dark:bg-[#0f172a] rounded-lg px-2 py-2 border border-slate-800 dark:border-slate-800/80 flex flex-col items-center justify-center text-center h-14 transition-colors">
+            <p className="text-[9px] text-slate-500 dark:text-slate-400 uppercase tracking-widest font-semibold mb-0.5">{s.label}</p>
+            {s.value.includes('Fault') ? (
+              <p className="text-[10px] font-bold text-white leading-tight">
+                N/A (Sensor<br/>Fault)
+              </p>
+            ) : (
+              <p className="text-xs font-bold text-white">{s.value}</p>
+            )}
           </div>
         ))}
       </div>
@@ -497,6 +508,8 @@ export default function IntersectionPage() {
   const router = useRouter();
   const [showAmbulanceModal, setShowAmbulanceModal] = useState(false);
   const [ambulanceDetectedDir, setAmbulanceDetectedDir] = useState<string | null>(null);
+  const [ambulanceAlertData, setAmbulanceAlertData] = useState<any>(null);
+  const ambulanceDismissedRef = useRef<boolean>(false); // once user closes, stays true until alert stream clears
   const [toast, setToast] = useState<ToastData | null>(null);
 
   // Lane states
@@ -540,6 +553,7 @@ export default function IntersectionPage() {
 
   // Live status from API
   const [liveStatus, setLiveStatus] = useState<string>("Green");
+  const [systemMode, setSystemMode] = useState<string>("AI_OPTIMIZED");
   const [streamActive, setStreamActive] = useState<boolean>(false);
   const [centerPlayer, setCenterPlayer] = useState<any>(null);
 
@@ -565,6 +579,8 @@ export default function IntersectionPage() {
   }, []);
 
   const prevPhaseRef = useRef<string>("");
+  const lanePhaseStartTimes = useRef<Record<string, number>>({});
+  const laneInitialDurations = useRef<Record<string, number>>({});
 
   useEffect(() => {
     if (!intersection?.nodeId) return;
@@ -587,20 +603,22 @@ export default function IntersectionPage() {
           const mappedDir = suffix || "01";
           
           let engineState = data.state_snapshot?.engine_state || "BASE_GREEN";
+          const gt = data.state_snapshot?.green_timer !== undefined ? data.state_snapshot.green_timer : 30;
+          const elapsed = data.state_snapshot?.total_green_elapsed !== undefined ? data.state_snapshot.total_green_elapsed : 0;
+
+          if (phaseChanged) {
+             const initial = Math.max(0, gt - elapsed);
+             setLaneGreenTimers(prev => ({ ...prev, [mappedDir]: initial }));
+             lanePhaseStartTimes.current[mappedDir] = Date.now();
+             laneInitialDurations.current[mappedDir] = initial;
+          }
+
           if (engineState.includes("YELLOW") || engineState.includes("YEL")) {
              newLaneStates[mappedDir] = "YEL";
           } else {
              newLaneStates[mappedDir] = "GRN";
-             const gt = data.state_snapshot?.green_timer;
-             const elapsed = data.state_snapshot?.total_green_elapsed || 0;
-             if (typeof gt === "number" && phaseChanged) {
-               // Only seed the countdown when the light physically changes to green.
-               // This guarantees a perfectly smooth local countdown without network snapbacks.
-               setLaneGreenTimers(prev => ({ ...prev, [mappedDir]: Math.max(0, gt - elapsed) }));
-             }
           }
         }
-        
         setLaneStates(newLaneStates as Record<string, "RED" | "YEL" | "GRN">);
         
         if (data.lane_metrics) {
@@ -611,7 +629,7 @@ export default function IntersectionPage() {
             const dir = suffix;
             if (dir) {
               const q = laneObj.queue_N || 0;
-              newDensities[dir] = `${Math.min(100, Math.round((q / 120) * 100))}%`;
+              newDensities[dir] = `${Number(q).toFixed(2)}%`;
             }
           }
           setLaneDensities(newDensities);
@@ -638,17 +656,19 @@ export default function IntersectionPage() {
           });
         }
         
-        setEvpCount(data.critical_events?.evp_overrides || 0);
-        setLiveStatus(data.status || "Green");
+        const currentEvp = data.critical_events?.evp_overrides || 0;
+        setEvpCount(currentEvp);
 
-        // Ambulance detection from real edge data (ITO only = 284501)
-        if (intersection.nodeId === "284501" && data.state_snapshot?.ambulance_detected) {
-          // Map the ambulance lane suffix to cam ID
-          const ambLane = data.state_snapshot.ambulance_lane || "01";
-          setAmbulanceDetectedDir(ambLane);
-        } else {
+        // Auto-clear ambulance alert when traffic payload shows evp_overrides back to 0
+        if (currentEvp === 0 && ambulanceDetectedDir) {
           setAmbulanceDetectedDir(null);
+          setAmbulanceAlertData(null);
+          setShowAmbulanceModal(false);
+          ambulanceDismissedRef.current = false; // reset so next alert can open modal
         }
+
+        setLiveStatus(data.status === "FAULT_OFFLINE" ? "Red" : (data.status || "Green"));
+        setSystemMode(data.systemMode || "AI_OPTIMIZED");
 
         // Activate stream when valid traffic data arrives (no separate endpoint needed)
         if (data.lane_metrics && Object.keys(data.lane_metrics).length > 0 && !streamActive) {
@@ -663,6 +683,37 @@ export default function IntersectionPage() {
     fetchTraffic();
     const interval = setInterval(fetchTraffic, 1500);
     return () => clearInterval(interval);
+  }, [intersection]);
+
+  // --- Dedicated Ambulance Alert Polling (completely separate from traffic) ---
+  useEffect(() => {
+    if (!intersection?.nodeId) return;
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+
+    const fetchAmbulanceAlert = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/ambulance-alerts/${intersection.nodeId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.active && data.alert) {
+          const laneId = data.alert.lane_id || "";
+          const laneSuffix = laneId.split("-").pop() || "01";
+          setAmbulanceDetectedDir(laneSuffix);
+          setAmbulanceAlertData(data.alert);
+        } else {
+          setAmbulanceDetectedDir(null);
+          setAmbulanceAlertData(null);
+          ambulanceDismissedRef.current = false; // alert stream ended, allow next alert to open modal
+        }
+      } catch (e) {
+        // Silently fail — ambulance polling is non-critical
+      }
+    };
+
+    fetchAmbulanceAlert();
+    const ambInterval = setInterval(fetchAmbulanceAlert, 2000);
+    return () => clearInterval(ambInterval);
   }, [intersection]);
 
   // Global Tick for Timers
@@ -681,12 +732,42 @@ export default function IntersectionPage() {
       
       setLaneGreenTimers(prev => {
         const n: Record<string, number> = { ...prev };
+        const now = Date.now();
         for (const dir in laneStates) {
-          if (laneStates[dir] === "GRN" && (n[dir] || 0) > 0) {
-            n[dir]--;
+          if (laneStates[dir] === "GRN" || laneStates[dir] === "YEL") {
+            const startTime = lanePhaseStartTimes.current[dir];
+            const duration = laneInitialDurations.current[dir];
+            if (startTime && duration !== undefined) {
+               const elapsedSec = (now - startTime) / 1000;
+               n[dir] = Math.max(0, Math.ceil(duration - elapsedSec));
+            }
+          } else {
+             // Red lanes don't display green timer
+             n[dir] = 0;
           }
         }
         return n;
+      });
+
+      // Auto-transition to YELLOW on frontend when green timer <= 4s
+      setLaneStates(prevStates => {
+         let changed = false;
+         const newStates = { ...prevStates };
+         for (const dir in newStates) {
+            if (newStates[dir] === "GRN") {
+               const startTime = lanePhaseStartTimes.current[dir];
+               const duration = laneInitialDurations.current[dir];
+               if (startTime && duration !== undefined) {
+                  const elapsedSec = (Date.now() - startTime) / 1000;
+                  const remaining = duration - elapsedSec;
+                  if (remaining <= 4) {
+                     newStates[dir] = "YEL"; 
+                     changed = true;
+                  }
+               }
+            }
+         }
+         return changed ? newStates : prevStates;
       });
 
       // Wait timers: tick UP for RED lanes (accumulating wait time), reset for GREEN
@@ -694,14 +775,14 @@ export default function IntersectionPage() {
         const n: Record<string, number> = { ...prev };
         for (const dir in laneStates) {
           if (laneStates[dir] === "RED") {
-            n[dir] = (n[dir] || 0) + 1;  // Counting up while vehicles wait
+            n[dir] = (n[dir] || 0) + 0.1;  // Accumulate correctly at 100ms interval
           } else if (laneStates[dir] === "GRN") {
             n[dir] = 0; // Green = no wait
           }
         }
         return n;
       });
-    }, 1000);
+    }, 100); // 100ms for high precision
     return () => clearInterval(tick);
   }, [laneActive, codeRed, laneStates]);
 
@@ -791,8 +872,11 @@ export default function IntersectionPage() {
     });
 
     if (targetState === "GRN") {
-      setLaneGreenTimers(p => ({ ...p, [dir]: 45 }));
+      const duration = 45;
+      setLaneGreenTimers(p => ({ ...p, [dir]: duration }));
       setLaneWaitTimers(p => ({ ...p, [dir]: 0 }));
+      lanePhaseStartTimes.current[dir] = Date.now();
+      laneInitialDurations.current[dir] = duration;
     }
 
     // Send Jetson API Call
@@ -805,6 +889,20 @@ export default function IntersectionPage() {
 
     addAudit(dir, targetState, "Manual quick switch (Unlocked)");
     showToast(`${dir} manually set to ${targetState}`, "success");
+  };
+
+  const handleCloseAmbulance = async () => {
+    // Block the polling loop from ever re-opening the modal for this alert
+    ambulanceDismissedRef.current = true;
+    setShowAmbulanceModal(false);
+
+    // Also clear the alert on the backend
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+      await fetch(`${API_URL}/api/ambulance-alerts/${intersection?.nodeId}/clear`, { method: "POST" });
+    } catch (e) {
+      // non-critical
+    }
   };
 
   /* ── Override toggle ── */
@@ -847,6 +945,24 @@ export default function IntersectionPage() {
 
       {/* ── Left Panel: Command Center (50%) ── */}
       <div className="w-1/2 h-full flex flex-col border-r border-gray-200 dark:border-slate-800 anim-dashboard-open relative z-10 bg-white dark:bg-slate-950">
+        
+        {/* Legacy Fallback Banner */}
+        {systemMode === "LEGACY_MICROCONTROLLER" && (
+          <div className="bg-red-600 dark:bg-red-800 text-white px-6 py-2.5 flex items-center justify-between animate-pulse shadow-[0_4px_12px_rgba(220,38,38,0.4)] z-20">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5" />
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest">CRITICAL: Jetson AI Platform Offline</p>
+                <p className="text-[10px] font-medium opacity-90">FALLBACK: Running on Legacy Microcontroller (Deterministic Timers)</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 bg-white/20 px-2 py-1 rounded border border-white/30">
+               <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+               <span className="text-[9px] font-bold">LEGACY MODE</span>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex-shrink-0 p-5 border-b border-gray-100 dark:border-slate-800 bg-gray-50/80 dark:bg-slate-900/80 flex items-center justify-between transition-colors">
           <div className="flex items-center gap-3">
@@ -861,11 +977,19 @@ export default function IntersectionPage() {
               <p className="text-xs text-gray-500 dark:text-gray-400 font-mono">Node NB-{intersection.nodeId} · Command Center</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full animate-pulse ${liveStatus === "Red" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : liveStatus === "Yellow" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`} />
-            <span className={`text-xs font-bold uppercase tracking-wider ${liveStatus === "Red" ? "text-red-600 dark:text-red-400" : liveStatus === "Yellow" ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}`}>
-              {liveStatus === "Red" ? "Critical" : liveStatus === "Yellow" ? "Moderate" : "Normal"}
-            </span>
+          <div className="flex items-center gap-3">
+            {ambulanceDetectedDir && (
+                <div onClick={() => setShowAmbulanceModal(true)} className="flex items-center gap-2 cursor-pointer bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-500/50 px-3 py-1.5 rounded-lg animate-pulse shadow-sm transition-transform hover:scale-105">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.8)]" />
+                  <span className="text-xs font-bold text-red-700 dark:text-red-400 uppercase tracking-widest">Ambulance Overriding Lane {ambulanceDetectedDir}</span>
+                </div>
+            )}
+            <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-950/50 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-800">
+              <span className={`w-2.5 h-2.5 rounded-full  ${systemMode === "LEGACY_MICROCONTROLLER" ? "bg-red-500 animate-ping ring-4 ring-red-500/20" : "animate-pulse"} ${liveStatus === "Red" ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : liveStatus === "Yellow" ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`} />
+              <span className={`text-xs font-bold uppercase tracking-wider ${systemMode === "LEGACY_MICROCONTROLLER" ? "text-red-600 dark:text-red-400" : (liveStatus === "Red" ? "text-red-600 dark:text-red-400" : liveStatus === "Yellow" ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400")}`}>
+                {systemMode === "LEGACY_MICROCONTROLLER" ? "Faulted / Fallback" : (liveStatus === "Red" ? "Critical" : liveStatus === "Yellow" ? "Moderate" : "Normal")}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -879,15 +1003,18 @@ export default function IntersectionPage() {
               <div className="grid grid-cols-2 gap-3">
                 {["01", "02", "03", "04"].map((dir, idx) => {
                   const current = codeRed ? "RED" : laneStates[dir];
-                  const waitVal = current === "RED" ? `${laneWaitTimers[dir]}s` : "0s";
-                  const greenVal = current === "GRN" ? `${laneGreenTimers[dir]}s` : "—";
-                  const density = laneDensities[dir] || "0%";
+                  const isFallback = systemMode === "LEGACY_MICROCONTROLLER";
+                  
+                  const waitVal = isFallback ? "60s (Fixed)" : (current === "RED" ? `${Math.floor(laneWaitTimers[dir] || 0)}s` : "0s");
+                  const greenVal = isFallback ? "30s (Static)" : (current === "GRN" || current === "YEL" ? `${laneGreenTimers[dir] ?? 0}s` : "—");
+                  const density = isFallback ? "N/A (Sensor Fault)" : (laneDensities[dir] || "0.00%");
+                  
                   const lane = { direction: `Camera ${dir}`, density, waitTime: waitVal, greenTime: greenVal, signal: current as "RED" | "YEL" | "GRN" };
                   
                   // Use specific video if it's the 5-camera demo node
                   const vidId = isDemoNode ? (DEMO_LANE_VIDEOS.LANES as any)[dir] || "1EiC9bvVGnk" : (intersection.videoId || "1EiC9bvVGnk");
                   return (
-                    <CameraFeed key={lane.direction} lane={lane} currentSignal={laneStates[dir]} videoId={vidId} streamActive={streamActive} />
+                    <CameraFeed key={lane.direction} lane={lane} currentSignal={laneStates[dir]} videoId={vidId} streamActive={streamActive} isFallback={isFallback} />
                   );
                 })}
               </div>
@@ -952,7 +1079,7 @@ export default function IntersectionPage() {
             {/* ── SECURE COMMAND CONSOLE ──                         */}
             {/* ══════════════════════════════════════════════════════ */}
             <section>
-              <div className="bg-gray-50 dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-sm dark:shadow-xl transition-colors">
+              <div className={`bg-gray-50 dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-sm dark:shadow-xl transition-all duration-500 ${systemMode === "LEGACY_MICROCONTROLLER" ? "opacity-30 pointer-events-none grayscale" : ""}`}>
 
                 {/* Console Header */}
                 <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-200 dark:border-slate-700/50 bg-gray-100/50 dark:bg-slate-800/60 transition-colors">
