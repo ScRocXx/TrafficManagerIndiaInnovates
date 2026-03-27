@@ -46,27 +46,50 @@ GHOST_NODE_NAMES = [
 ]
 LANE_IDS = ["01", "02", "03", "04"]
 GHOST_NODES: dict = {}   # populated at startup
+GHOST_OVERRIDES: dict = {}  # {node_id: {"lane": "02", "state": "GRN", "expires": datetime}}
+
+
+def _nodeid_to_ghost(node_id_frontend: str) -> str | None:
+    """Map frontend nodeId like '284503' to internal 'Node_3'. Returns None if not a ghost."""
+    try:
+        num = int(node_id_frontend.replace("2845", ""))
+        if 3 <= num <= 25:
+            return f"Node_{num}"
+    except ValueError:
+        pass
+    return None
 
 
 def init_ghost_nodes():
-    """Seed 23 ghost nodes with random but plausible starting state."""
+    """Seed 23 ghost nodes with realistic starting wait times."""
     global GHOST_NODES
     for idx, name in enumerate(GHOST_NODE_NAMES):
         node_id = f"Node_{idx + 3}"          # Node_3 … Node_25
         active_lane = random.choice(LANE_IDS)
+        green_time = random.randint(15, 45)
+        red_lanes = [lid for lid in LANE_IDS if lid != active_lane]
+        random.shuffle(red_lanes)
+        # One red lane gets a high wait (20-30s = recently waited a full cycle)
+        # Other two red lanes get random wait between 0 and green_time
+        wait_map = {
+            active_lane: 0,
+            red_lanes[0]: random.randint(20, 30),
+            red_lanes[1]: random.randint(0, green_time),
+            red_lanes[2]: random.randint(0, green_time),
+        }
         lanes = {}
         for lid in LANE_IDS:
             is_green = lid == active_lane
             lanes[lid] = {
                 "density": random.randint(20, 70),
-                "wait_time": 0 if is_green else random.randint(5, 30),
+                "wait_time": wait_map[lid],
                 "is_green": is_green,
             }
         GHOST_NODES[node_id] = {
             "name": name,
             "lanes": lanes,
             "active_green_lane": active_lane,
-            "remaining_green_time": random.randint(15, 45),
+            "remaining_green_time": green_time,
         }
 
 
@@ -109,7 +132,17 @@ def _switch_light(node: dict):
 async def ghost_physics_loop():
     """1-second tick that updates every ghost node's lanes."""
     while True:
-        for node in GHOST_NODES.values():
+        now = datetime.datetime.utcnow()
+        # Clean expired overrides
+        expired = [nid for nid, ov in GHOST_OVERRIDES.items() if now >= ov["expires"]]
+        for nid in expired:
+            GHOST_OVERRIDES.pop(nid, None)
+
+        for node_id, node in GHOST_NODES.items():
+            # Skip physics for nodes under manual override
+            if node_id in GHOST_OVERRIDES:
+                continue
+
             for lid in LANE_IDS:
                 lane = node["lanes"][lid]
                 if lane["is_green"]:
@@ -299,9 +332,45 @@ def ingest_traffic(data: TrafficPayload, db: Session = Depends(database.get_db))
 def override_signal(data: OverrideRequest):
     """
     Endpoint mapping frontend override command directly to Jetson Edge.
-    In real life this would push an MQTT message back down to the edge node.
+    For ghost nodes, temporarily overrides the physics simulation.
     """
     print(f"[{datetime.datetime.utcnow().isoformat()}] COMMAND TO JETSON {data.nodeId} -> Lane {data.lane} to {data.state}. Reason: {data.reason}")
+
+    # If this targets a ghost node, apply the override to the simulation
+    ghost_id = _nodeid_to_ghost(data.nodeId)
+    if ghost_id and ghost_id in GHOST_NODES:
+        node = GHOST_NODES[ghost_id]
+        target_lane = data.lane  # "01", "02", "03", "04"
+        target_state = data.state.upper()  # "GRN", "RED", "YEL"
+
+        if target_lane in LANE_IDS:
+            # Force the requested lane green, others red
+            if target_state in ("GRN", "GREEN"):
+                for lid in LANE_IDS:
+                    node["lanes"][lid]["is_green"] = (lid == target_lane)
+                    if lid == target_lane:
+                        node["lanes"][lid]["wait_time"] = 0
+                node["active_green_lane"] = target_lane
+                node["remaining_green_time"] = 45
+            elif target_state in ("RED", "YEL", "YELLOW"):
+                # Force this lane red; pick another lane to go green
+                if node["active_green_lane"] == target_lane:
+                    node["lanes"][target_lane]["is_green"] = False
+                    alt = [l for l in LANE_IDS if l != target_lane]
+                    new_green = random.choice(alt)
+                    node["lanes"][new_green]["is_green"] = True
+                    node["lanes"][new_green]["wait_time"] = 0
+                    node["active_green_lane"] = new_green
+                    node["remaining_green_time"] = 30
+
+            # Freeze physics for 45 seconds so the override is visible
+            GHOST_OVERRIDES[ghost_id] = {
+                "lane": target_lane,
+                "state": target_state,
+                "expires": datetime.datetime.utcnow() + datetime.timedelta(seconds=45),
+            }
+            print(f"[GHOST OVERRIDE] {ghost_id} lane {target_lane} -> {target_state} for 45s")
+
     return {"success": True, "message": "Signal transmitted to Edge Jetson device."}
 
 @app.get("/api/devices")
