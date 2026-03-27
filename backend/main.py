@@ -218,6 +218,8 @@ class StateSnapshot(BaseModel):
     engine_state: str
     box_gridlock_pct: float
     trigger: str | None = None
+    green_timer: int | None = None
+    total_green_elapsed: int | None = None
 
 class LaneMetric(BaseModel):
     queue_N: int
@@ -357,12 +359,13 @@ def get_latest_traffic(db: Session = Depends(database.get_db)):
             # (which ranges from 2000 to 14000 in the static data)
             vehicles_passed = max(1200, estimated_volume * 15) # Scale up to match dashboard norms
 
-            # Check node health
+            # Check node health (Dynamic fault timeout: green_timer + 20 seconds)
             last_seen = LAST_SEEN_NODES.get(m.node_id)
             is_offline = False
+            timeout_limit = state.get("green_timer", 30) + 20 if state else 50
             if last_seen:
                 seconds_since = (datetime.datetime.utcnow() - last_seen).total_seconds()
-                if seconds_since > 20: # 20 second timeout
+                if seconds_since > timeout_limit:
                     is_offline = True
             
             # Status calculation
@@ -469,16 +472,18 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
         }
     
     is_offline = False
+    timeout_limit = 50
     if record:
+        timeout_limit = record.state_snapshot.get("green_timer", 30) + 20 if record.state_snapshot else 50
         # Check if the actual data is stale (e.g. Jetson crashed and is re-sending a frozen payload)
         seconds_since_record = (datetime.datetime.utcnow() - record.timestamp).total_seconds()
-        if seconds_since_record > 20:
+        if seconds_since_record > timeout_limit:
             is_offline = True
 
     last_seen = LAST_SEEN_NODES.get(node_id)
     if last_seen:
         seconds_since = (datetime.datetime.utcnow() - last_seen).total_seconds()
-        if seconds_since > 20:
+        if seconds_since > timeout_limit:
             is_offline = True
 
     return {
