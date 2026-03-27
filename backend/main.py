@@ -353,8 +353,14 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
             "systemMode": "AI_OPTIMIZED"
         }
     
-    last_seen = LAST_SEEN_NODES.get(node_id)
     is_offline = False
+    if record:
+        # Check if the actual data is stale (e.g. Jetson crashed and is re-sending a frozen payload)
+        seconds_since_record = (datetime.datetime.utcnow() - record.timestamp).total_seconds()
+        if seconds_since_record > 20:
+            is_offline = True
+
+    last_seen = LAST_SEEN_NODES.get(node_id)
     if last_seen:
         seconds_since = (datetime.datetime.utcnow() - last_seen).total_seconds()
         if seconds_since > 20:

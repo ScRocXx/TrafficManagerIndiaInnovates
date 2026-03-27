@@ -758,11 +758,8 @@ export default function IntersectionPage() {
                if (startTime && duration !== undefined) {
                   const elapsedSec = (Date.now() - startTime) / 1000;
                   const remaining = duration - elapsedSec;
-                  if (remaining <= 5 && remaining > 0) {
-                     newStates[dir] = "YEL";
-                     changed = true;
-                  } else if (remaining <= 0) {
-                     newStates[dir] = "RED";
+                  if (remaining <= 5) {
+                     newStates[dir] = "YEL"; 
                      changed = true;
                   }
                }
