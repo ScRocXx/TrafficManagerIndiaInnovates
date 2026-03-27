@@ -54,7 +54,7 @@ const POSSIBLE_ISSUES: Record<string, string[]> = {
   online: [],
 };
 
-function generateDevicesForIntersections(): DeviceStatus[] {
+function generateDevicesForIntersections(tick: number): DeviceStatus[] {
   const allDevices: DeviceStatus[] = [];
   intersections.forEach((intersection, idx) => {
     const seed = parseInt(intersection.nodeId.slice(-3)) || 100;
@@ -68,13 +68,16 @@ function generateDevicesForIntersections(): DeviceStatus[] {
       const prefix = type === "camera" ? "CAM" : type === "sensor" ? "SEN" : "CTR";
       const deviceId = `${prefix}-${String(idx * 3 + d + 1).padStart(3, "0")}`;
 
-      // Deterministic status based on seed
-      const statusSeed = (seed + d * 7) % 20;
+      // Time-varying status: mix tick into the seed so ~2-3 devices shift each cycle
+      const statusSeed = (seed + d * 7 + tick * 3) % 20;
       const status: "online" | "offline" | "degraded" =
         statusSeed < 2 ? "offline" : statusSeed < 5 ? "degraded" : "online";
 
       const issues = status === "online" ? [] :
-        POSSIBLE_ISSUES[status].filter((_, i) => (seed + d + i) % 3 === 0).slice(0, 2);
+        POSSIBLE_ISSUES[status].filter((_, i) => (seed + d + i + tick) % 3 === 0).slice(0, 2);
+
+      // Dynamic "last ping" based on tick
+      const pingSeconds = status === "online" ? ((tick * 2 + seed) % 8) + 1 : undefined;
 
       allDevices.push({
         id: deviceId,
@@ -83,7 +86,7 @@ function generateDevicesForIntersections(): DeviceStatus[] {
         location: intersection.name,
         status,
         uptime: status === "offline" ? "0%" : status === "degraded" ? `${72 + (seed % 20)}%` : `${96 + (seed % 4)}.${seed % 10}%`,
-        lastPing: status === "offline" ? `${5 + (seed % 40)} min ago` : status === "degraded" ? `${1 + (seed % 14)} min ago` : `${(seed % 5) + 1} sec ago`,
+        lastPing: status === "offline" ? `${5 + ((seed + tick) % 40)} min ago` : status === "degraded" ? `${1 + ((seed + tick) % 14)} min ago` : `${pingSeconds} sec ago`,
         firmware: FIRMWARE_VERSIONS[(seed + d) % FIRMWARE_VERSIONS.length],
         issues,
       });
@@ -110,6 +113,13 @@ export function useNetworkStatus() {
   const [nodes, setNodes] = useState<(NodeData | null)[]>([]);
   const [liveTraffic, setLiveTraffic] = useState<Record<string, { status: string; congestionLevel: number; vehiclesPassed: number }>>({});
   const [liveDevices, setLiveDevices] = useState<DeviceStatus[]>([]);
+  const [tick, setTick] = useState(0);
+
+  // Device simulation ticker — shifts statuses every 8 seconds
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 8000);
+    return () => clearInterval(interval);
+  }, []);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
 
@@ -235,9 +245,9 @@ export function useNetworkStatus() {
     });
   }, [nodes, liveTraffic]);
 
-  // Merge simulated devices with live DB devices
+  // Merge simulated devices with live DB devices (re-generates every 8s tick)
   const devices: DeviceStatus[] = useMemo(() => {
-    const simulated = generateDevicesForIntersections();
+    const simulated = generateDevicesForIntersections(tick);
     if (liveDevices.length === 0) return simulated;
 
     // Merge: live devices override simulated ones by ID
@@ -249,7 +259,7 @@ export function useNetworkStatus() {
       }
       return dev;
     });
-  }, [liveDevices]);
+  }, [liveDevices, tick]);
 
   const vulnerabilities: VulnerabilityData[] = useMemo(() => {
     return generateVulnerabilities(devices);
