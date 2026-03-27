@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { Search, Bell, UserCircle, AlertCircle, Camera, Navigation, Clock, LogOut, Settings, BarChart3, Shield } from "lucide-react";
-import { vulnerabilitiesData } from '../app/page';
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { intersections } from '@/lib/intersections';
 
 export function SearchBar({ onSelect, className = "absolute top-6 left-1/2 -translate-x-1/2 z-[1000] w-[400px]" }: { onSelect?: (name: string) => void, className?: string }) {
@@ -60,6 +60,7 @@ export function SearchBar({ onSelect, className = "absolute top-6 left-1/2 -tran
 
 export function ProfileAlerts({ setActiveTab, className = "absolute top-6 right-6" }: { setActiveTab?: (tab: string) => void; className?: string }) {
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | null>(null);
+  const { vulnerabilities } = useNetworkStatus();
 
   const toggleMenu = (menu: "notifications" | "profile") => {
     if (openMenu === menu) setOpenMenu(null);
@@ -89,20 +90,22 @@ export function ProfileAlerts({ setActiveTab, className = "absolute top-6 right-
           onClick={() => toggleMenu("notifications")}
           className={`w-12 h-12 rounded-full shadow-sm flex items-center justify-center hover:shadow-md transition-all ${openMenu === "notifications" ? "bg-blue-50 dark:bg-blue-900/30 ring-2 ring-blue-500" : "bg-white dark:bg-slate-800"}`}
         >
-          <div className="relative">
-            <Bell className={`w-6 h-6 ${openMenu === "notifications" ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-300"}`} />
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-slate-800"></span>
-          </div>
+            <div className="relative">
+              <Bell className={`w-6 h-6 ${openMenu === "notifications" ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-gray-300"}`} />
+              {vulnerabilities.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-slate-800"></span>
+              )}
+            </div>
         </button>
 
         {openMenu === "notifications" && (
           <div className="absolute right-0 top-full mt-3 w-[400px] bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-gray-100 dark:border-slate-700/50 overflow-hidden flex flex-col max-h-[500px]">
             <div className="p-4 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center bg-gray-50/50 dark:bg-slate-800/80">
               <h3 className="font-bold text-gray-800 dark:text-white">Active Alerts</h3>
-              <span className="bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 text-xs font-bold px-2 py-1 rounded-full">{vulnerabilitiesData.length} New</span>
+              <span className="bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 text-xs font-bold px-2 py-1 rounded-full">{vulnerabilities.length} New</span>
             </div>
             <div className="overflow-y-auto w-full">
-              {vulnerabilitiesData.map((notif: { id: string, status: string, type: string, last_ping: string, issue: string, location: string }) => (
+              {vulnerabilities.map((notif) => (
                 <div
                   key={notif.id}
                   onClick={() => handleNotificationClick(notif.id)}
@@ -116,7 +119,7 @@ export function ProfileAlerts({ setActiveTab, className = "absolute top-6 right-
                       <span className="font-semibold text-gray-800 dark:text-white text-sm">{notif.type} • {notif.id}</span>
                       <span className="text-xs text-gray-400 flex items-center">
                         <Clock className="w-3 h-3 mr-1" />
-                        {new Date(notif.last_ping).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {notif.last_ping}
                       </span>
                     </div>
                     <p className={`text-sm mb-1 font-medium ${notif.status === 'Critical' ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-500'}`}>{notif.issue}</p>
@@ -124,6 +127,15 @@ export function ProfileAlerts({ setActiveTab, className = "absolute top-6 right-
                   </div>
                 </div>
               ))}
+              {vulnerabilities.length === 0 && (
+                <div className="p-8 text-center">
+                  <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                    <Bell className="w-6 h-6 text-green-500" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-300">All systems operational</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">No active alerts at this time</p>
+                </div>
+              )}
             </div>
             <div className="p-3 bg-gray-50 dark:bg-slate-800/80 border-t border-gray-100 dark:border-slate-700 text-center text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 cursor-pointer">
               View all alerts

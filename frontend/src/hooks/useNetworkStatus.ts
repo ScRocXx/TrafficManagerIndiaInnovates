@@ -68,10 +68,10 @@ function generateDevicesForIntersections(tick: number): DeviceStatus[] {
       const prefix = type === "camera" ? "CAM" : type === "sensor" ? "SEN" : "CTR";
       const deviceId = `${prefix}-${String(idx * 3 + d + 1).padStart(3, "0")}`;
 
-      // Time-varying status: mix tick into the seed so ~2-3 devices shift each cycle
-      const statusSeed = (seed + d * 7 + tick * 3) % 20;
+      // Time-varying status: mix tick into seed — keep faults LOW (~5%) for demo
+      const statusSeed = (seed + d * 7 + tick * 3) % 30;
       const status: "online" | "offline" | "degraded" =
-        statusSeed < 2 ? "offline" : statusSeed < 5 ? "degraded" : "online";
+        statusSeed < 1 ? "offline" : statusSeed < 3 ? "degraded" : "online";
 
       const issues = status === "online" ? [] :
         POSSIBLE_ISSUES[status].filter((_, i) => (seed + d + i + tick) % 3 === 0).slice(0, 2);
