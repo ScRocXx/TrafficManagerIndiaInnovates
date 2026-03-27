@@ -105,7 +105,7 @@ export default function AmbulanceModal({ isOpen, onClose }: AmbulanceModalProps)
                 </div>
               </div>
 
-              {/* Emergency Level */}
+              Emergency Level
               <div className="mt-6">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Emergency Level</p>

@@ -932,7 +932,7 @@ export default function IntersectionPage() {
             </div>
             <div className="flex items-center gap-2 bg-white/20 px-2 py-1 rounded border border-white/30">
                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-               <span className="text-[9px] font-bold">LAGECY MODE</span>
+               <span className="text-[9px] font-bold">LEGACY MODE</span>
             </div>
           </div>
         )}
