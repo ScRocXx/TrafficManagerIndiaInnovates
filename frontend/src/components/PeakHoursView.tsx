@@ -1,8 +1,8 @@
 "use client";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Clock, Search, ArrowUpRight, ArrowDownRight, Wrench, Timer, Activity } from "lucide-react";
-import { intersections } from "@/lib/intersections";
 import { ProfileAlerts } from "./Overlays";
+import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -31,79 +31,70 @@ interface IntersectionPeakData {
   avgPValue: number;
   maxCongestionHrs: number;
   clearanceWindow: string;
-  hourlyData: { hour: string; vehicles: number }[];
+  hourlyData: { hour: string; density: number }[];
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function CustomTooltip({ active, payload, label, isDark }: any) {
+function CustomTooltip({ active, payload, label, isDark, unit = "% density", isVolume = false }: any) {
   if (!active || !payload?.length) return null;
+  const val = Number(payload[0].value);
+  const displayVal = isVolume ? val.toLocaleString() : val.toFixed(1);
   return (
     <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2 shadow-xl">
       <p className="text-[11px] text-gray-500 dark:text-slate-400 font-mono">{label}</p>
       <p className="text-sm font-bold text-gray-900 dark:text-white">
-        {Number(payload[0].value).toLocaleString()}{" "}
-        <span className="text-gray-500 dark:text-slate-400 font-normal text-xs">vehicles</span>
+        {displayVal}{" "}
+        <span className="text-gray-500 dark:text-slate-400 font-normal text-xs">{unit}</span>
       </p>
     </div>
   );
 }
 
 export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: string) => void }) {
+  const { nodes, intersections } = useNetworkStatus();
   const [searchTerm, setSearchTerm] = useState("");
   const [isDark, setIsDark] = useState(false);
-  const [data, setData] = useState<IntersectionPeakData[]>([]);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  useEffect(() => {
-    const fetchTraffic = async () => {
-      try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
-        const res = await fetch(`${API_URL}/api/traffic`);
-        if (res.ok) {
-          const liveData = await res.json();
-          const newData: IntersectionPeakData[] = intersections.map(node => {
-            const live = liveData.find((l: any) => l.nodeId === node.nodeId);
-            const seed = parseInt(node.nodeId.slice(-3)) || 100;
-            
-            const status = live ? (live.status as "Red" | "Yellow" | "Green") : ((seed % 10 < 2) ? "Red" : (seed % 10 < 5) ? "Yellow" : "Green");
-            const baseVol = status === "Red" ? 1200 : status === "Yellow" ? 800 : 400;
-            
-            const hourlyMock = [
-              { hour: "6AM", vehicles: Math.floor(baseVol) }, 
-              { hour: "8AM", vehicles: Math.floor(baseVol * 3) }, 
-              { hour: "10AM", vehicles: Math.floor(baseVol * 2) },
-              { hour: "12PM", vehicles: Math.floor(baseVol * 2.2) }, 
-              { hour: "2PM", vehicles: Math.floor(baseVol * 1.9) }, 
-              { hour: "4PM", vehicles: Math.floor(baseVol * 3.5) },
-              { hour: "6PM", vehicles: live ? Math.floor(live.vehiclesPassed * 5) : Math.floor(baseVol * 4.5) }, 
-              { hour: "8PM", vehicles: Math.floor(baseVol * 2.5) }, 
-              { hour: "10PM", vehicles: Math.floor(baseVol * 0.8) },
-            ];
-
-            const congestion = live ? live.congestionLevel : (status === "Red" ? 0.78 : status === "Yellow" ? 0.48 : 0.15);
-
-            return {
-              id: node.nodeId,
-              name: node.name,
-              status: status,
-              peakHour: "6:00 PM",
-              peakVolume: live ? Math.floor(Math.max(live.vehiclesPassed * 5, baseVol * 4)) : Math.floor(baseVol * 4.5),
-              avgPValue: congestion,
-              maxCongestionHrs: congestion > 0.6 ? +(congestion * 6).toFixed(1) : 1.5,
-              clearanceWindow: status === "Red" ? "1 AM – 4 AM" : "10 PM – 5 AM",
-              hourlyData: hourlyMock
-            };
-          });
-          setData(newData);
-        }
-      } catch (e) {
-        console.error("Traffic backend offline", e);
+  const intersectionData = React.useMemo(() => {
+    return intersections.map((intersection, idx) => {
+      const node = nodes[idx] || null;
+      let avgDensity = intersection.p * 100;
+      
+      if (node) {
+        const laneDensities = Object.values(node.lanes).map(l => l.density);
+        avgDensity = laneDensities.reduce((a, b) => a + b, 0) / (laneDensities.length || 1);
       }
-    };
-    fetchTraffic();
-    const interval = setInterval(fetchTraffic, 5000);
-    return () => clearInterval(interval);
-  }, []);
+
+      // Simulated hourly density curve seeded from current live density
+      const hourlyData = [
+        { hour: "6AM", density: Math.min(100, avgDensity * 0.3) },
+        { hour: "8AM", density: Math.min(100, avgDensity * 0.7) },
+        { hour: "10AM", density: Math.min(100, avgDensity * 0.55) },
+        { hour: "12PM", density: Math.min(100, avgDensity * 0.65) },
+        { hour: "2PM", density: Math.min(100, avgDensity * 0.6) },
+        { hour: "4PM", density: Math.min(100, avgDensity * 0.8) },
+        { hour: "6PM", density: Math.min(100, avgDensity * 1.0) },
+        { hour: "8PM", density: Math.min(100, avgDensity * 0.5) },
+        { hour: "10PM", density: Math.min(100, avgDensity * 0.2) },
+      ];
+
+      const peakDensity = Math.max(...hourlyData.map(h => h.density));
+      const maxWait = node ? Math.max(...Object.values(node.lanes).map(l => l.wait_time)) : 0;
+
+      return {
+        id: `INT-${idx + 1}`,
+        name: intersection.name,
+        status: intersection.status as any,
+        peakHour: "6:00 PM",
+        peakVolume: Math.round(peakDensity),
+        avgPValue: intersection.p,
+        maxCongestionHrs: Number((intersection.p * 5).toFixed(1)),
+        clearanceWindow: intersection.status === "Red" ? "1 AM – 4 AM" : "10 PM – 5 AM",
+        hourlyData
+      };
+    });
+  }, [nodes, intersections]);
 
   useEffect(() => {
     // Check initial dark mode state
@@ -136,11 +127,11 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
     }
   };
 
-  const filtered = data.filter(i =>
+  const filtered = intersectionData.filter(i =>
     i.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const sidebarFiltered = data.filter(i =>
+  const sidebarFiltered = intersectionData.filter(i =>
     i.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -182,7 +173,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-gray-900 dark:text-white">City-Wide Traffic Volume</h2>
-                  <p className="text-xs text-gray-500 dark:text-slate-500 font-mono">Delhi NCR · All 12 Monitored Nodes · Today</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-500 font-mono">Delhi NCR · All {intersections.length} Monitored Nodes · Today</p>
                 </div>
               </div>
               <div className="flex items-center gap-4 text-sm">
@@ -208,8 +199,8 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#1e293b" : "#e2e8f0"} />
                   <XAxis dataKey="hour" tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 10 }} axisLine={{ stroke: isDark ? '#1e293b' : '#e2e8f0' }} tickLine={false} />
-                  <YAxis tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 10 }} axisLine={{ stroke: isDark ? '#1e293b' : '#e2e8f0' }} tickLine={false} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip content={<CustomTooltip isDark={isDark} />} />
+                  <YAxis tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 10 }} axisLine={{ stroke: isDark ? '#1e293b' : '#e2e8f0' }} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v.toString()} />
+                  <Tooltip content={<CustomTooltip isDark={isDark} unit="vehicles" isVolume={true} />} />
                   <Area type="monotone" dataKey="vehicles" stroke={getPrimaryColor()} strokeWidth={2} fill="url(#areaGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -240,15 +231,15 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
               </div>
 
               <div className="flex gap-5">
-                {/* Bar Chart */}
+                {/* Bar Chart — Density % */}
                 <div className="flex-1 h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={item.hourlyData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#1e293b" : "#e2e8f0"} vertical={false} />
                       <XAxis dataKey="hour" tick={{ fill: isDark ? '#475569' : '#94a3b8', fontSize: 9 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: isDark ? '#475569' : '#94a3b8', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
+                      <YAxis tick={{ fill: isDark ? '#475569' : '#94a3b8', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} />
                       <Tooltip content={<CustomTooltip isDark={isDark} />} />
-                      <Bar dataKey="vehicles" fill={getBarColor(item.status)} radius={[2, 2, 0, 0]} />
+                      <Bar dataKey="density" fill={getBarColor(item.status)} radius={[2, 2, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -323,15 +314,15 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
         <div className="p-4 border-t border-gray-200 dark:border-slate-800 space-y-2">
           <div className="flex justify-between text-[11px]">
             <span className="text-gray-500 dark:text-slate-500">Critical Nodes</span>
-            <span className="text-sky-600 dark:text-red-400 font-bold font-mono">{data.filter(i => i.status === 'Red').length}</span>
+            <span className="text-sky-600 dark:text-red-400 font-bold font-mono">{intersectionData.filter(i => i.status === 'Red').length}</span>
           </div>
           <div className="flex justify-between text-[11px]">
             <span className="text-gray-500 dark:text-slate-500">Moderate</span>
-            <span className="text-amber-500 dark:text-amber-400 font-bold font-mono">{data.filter(i => i.status === 'Yellow').length}</span>
+            <span className="text-amber-500 dark:text-amber-400 font-bold font-mono">{intersectionData.filter(i => i.status === 'Yellow').length}</span>
           </div>
           <div className="flex justify-between text-[11px]">
             <span className="text-gray-500 dark:text-slate-500">Normal Flow</span>
-            <span className="text-gray-400 dark:text-slate-400 font-bold font-mono">{data.filter(i => i.status === 'Green').length}</span>
+            <span className="text-gray-400 dark:text-slate-400 font-bold font-mono">{intersectionData.filter(i => i.status === 'Green').length}</span>
           </div>
         </div>
       </div>
