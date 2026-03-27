@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from typing import List
 import datetime
 import random
+import asyncio
+import math
 from sqlalchemy.orm import Session
 import json
 import threading
@@ -30,6 +32,99 @@ app.add_middleware(
 
 # Global Stream Status
 STREAM_ACTIVE = False
+
+# ─── GHOST NODE SIMULATION (23 simulated intersections) ─────────────────────
+GHOST_NODE_NAMES = [
+    "Connaught Place", "South Ext", "Dhaula Kuan", "Kashmere Gate",
+    "Ashram Chowk", "Laxmi Nagar", "Karol Bagh", "Moolchand",
+    "Raja Garden", "Akshardham", "Lajpat Nagar", "Dwarka",
+    "Rohini", "Vasant Kunj", "Saket", "Nehru Place",
+    "Hauz Khas", "Chandni Chowk", "Pitampura", "Janakpuri",
+    "Okhla", "Vasant Vihar", "Greater Kailash",
+]
+LANE_IDS = ["01", "02", "03", "04"]
+GHOST_NODES: dict = {}   # populated at startup
+
+
+def init_ghost_nodes():
+    """Seed 23 ghost nodes with random but plausible starting state."""
+    global GHOST_NODES
+    for idx, name in enumerate(GHOST_NODE_NAMES):
+        node_id = f"Node_{idx + 3}"          # Node_3 … Node_25
+        active_lane = random.choice(LANE_IDS)
+        lanes = {}
+        for lid in LANE_IDS:
+            is_green = lid == active_lane
+            lanes[lid] = {
+                "density": random.randint(20, 70),
+                "wait_time": 0 if is_green else random.randint(5, 30),
+                "is_green": is_green,
+            }
+        GHOST_NODES[node_id] = {
+            "name": name,
+            "lanes": lanes,
+            "active_green_lane": active_lane,
+            "remaining_green_time": random.randint(15, 45),
+        }
+
+
+def _switch_light(node: dict):
+    """Pressure-based light switch when remaining_green_time hits 0."""
+    # Calculate pressure for every RED lane
+    best_lane = None
+    best_pressure = -1
+    for lid in LANE_IDS:
+        lane = node["lanes"][lid]
+        if lane["is_green"]:
+            continue
+        pressure = lane["density"] * lane["wait_time"]
+        if pressure > best_pressure:
+            best_pressure = pressure
+            best_lane = lid
+
+    if best_lane is None:
+        best_lane = random.choice(LANE_IDS)
+
+    # Turn old green lane red
+    old_green = node["active_green_lane"]
+    node["lanes"][old_green]["is_green"] = False
+
+    # Calculate new green time using the exponential formula
+    new_lane = node["lanes"][best_lane]
+    d = new_lane["density"]
+    w = new_lane["wait_time"]
+    base = 15 + ((d / 100) ** 1.5) * 30
+    wait_mult = 1.0 + (0.5 * (w / 180))
+    final_green = int(max(15, min(45, base * wait_mult)))
+
+    # Activate new green lane
+    new_lane["is_green"] = True
+    new_lane["wait_time"] = 0
+    node["active_green_lane"] = best_lane
+    node["remaining_green_time"] = final_green
+
+
+async def ghost_physics_loop():
+    """1-second tick that updates every ghost node's lanes."""
+    while True:
+        for node in GHOST_NODES.values():
+            for lid in LANE_IDS:
+                lane = node["lanes"][lid]
+                if lane["is_green"]:
+                    # Green lane: density drains, wait stays 0
+                    lane["density"] = max(0, lane["density"] - random.randint(2, 5))
+                    lane["wait_time"] = 0
+                else:
+                    # Red lane: density slowly builds, wait ticks up
+                    lane["density"] = min(100, lane["density"] + random.randint(0, 3))
+                    if lane["density"] > 0:
+                        lane["wait_time"] += 1
+
+            node["remaining_green_time"] -= 1
+            if node["remaining_green_time"] <= 0:
+                _switch_light(node)
+
+        await asyncio.sleep(1)
 
 # --- MQTT BACKGROUND WORKER ---
 MQTT_BROKER = "broker.hivemq.com"
@@ -83,10 +178,13 @@ def start_mqtt_client():
         print(f"MQTT Connection Failed: {e}")
 
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
     # Run MQTT entirely in the background outside of FastAPI event loop
     mqtt_thread = threading.Thread(target=start_mqtt_client, daemon=True)
     mqtt_thread.start()
+    # Seed and start ghost node physics simulation
+    init_ghost_nodes()
+    asyncio.create_task(ghost_physics_loop())
 
 # --- Pydantic Data Models (Input Validation) ---
 class DeviceHealth(BaseModel):
@@ -250,21 +348,36 @@ def get_latest_traffic(db: Session = Depends(database.get_db)):
 
 @app.get("/api/network-status")
 def get_network_status():
-    """Simulate multi-node network status for the V6 dashboard mapping."""
+    """Return 25-node unified status: 2 hero nodes + 23 physics-simulated ghost nodes."""
     nodes = []
-    for i in range(1, 13):
-        # Give the first two nodes higher density to make them critical "red" in UI
-        density = 85 if i <= 2 else random.randint(15, 70)
-        status = "ONLINE"
-        if random.random() < 0.05:
-            status = random.choice(["CAMERA_FAULT", "THERMAL_THROTTLE"])
+
+    # ── Hero Nodes (Node_1 ITO, Node_2 AIIMS) — untouched, same as before ──
+    for i in range(1, 3):
         nodes.append({
             "node_id": f"Node_{i}",
-            "hardware_status": status,
+            "hardware_status": "ONLINE",
             "lanes": {
-               "N": {"density": density, "wait_time": random.randint(10, 55)}
-            }
+                "N": {"density": 85, "wait_time": random.randint(10, 55)}
+            },
         })
+
+    # ── Ghost Nodes (Node_3 … Node_25) — driven by physics loop ──
+    for node_id, node in GHOST_NODES.items():
+        # Pick the highest-density lane as the representative 'N' value for the frontend
+        best_lane = max(node["lanes"].values(), key=lambda l: l["density"])
+        nodes.append({
+            "node_id": node_id,
+            "hardware_status": "ONLINE",
+            "lanes": {
+                "N": {
+                    "density": best_lane["density"],
+                    "wait_time": best_lane["wait_time"],
+                }
+            },
+            "active_green": node["active_green_lane"],
+            "green_timer": node["remaining_green_time"],
+        })
+
     return {"status": "success", "nodes": nodes}
 
 @app.get("/api/traffic/{node_id}")
