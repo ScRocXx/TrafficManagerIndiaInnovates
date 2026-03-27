@@ -6,8 +6,9 @@ import { SearchBar, ProfileAlerts } from '@/components/Overlays';
 import PeakHoursView from '@/components/PeakHoursView';
 import MostBusiestView from '@/components/MostBusiestView';
 import HardwareVulnerabilityView from '@/components/HardwareVulnerabilityView';
-import { X } from 'lucide-react';
+import { X, PlayCircle, Loader2 } from 'lucide-react';
 import type { IntersectionData } from '@/lib/intersections';
+import YouTube from 'react-youtube';
 
 export type { IntersectionData } from '@/lib/intersections';
 
@@ -59,6 +60,18 @@ export default function Home() {
   
   // State for live selected intersection data
   const [liveData, setLiveData] = useState<{status: string, p: number} | null>(null);
+  
+  // YouTube API Stream Sync
+  const [streamActive, setStreamActive] = useState(false);
+  const [player, setPlayer] = useState<any>(null);
+
+  // Sync player to streamActive state
+  useEffect(() => {
+    if (player) {
+      if (streamActive) player.playVideo();
+      else player.pauseVideo();
+    }
+  }, [streamActive, player]);
 
   // Poll for live data when an intersection is selected
   useEffect(() => {
@@ -79,6 +92,8 @@ export default function Home() {
             status: liveMatch.status || "Green",
             p: liveMatch.congestionLevel || 0
           });
+          // Activate stream when valid traffic data arrives
+          if (!streamActive) setStreamActive(true);
         }
       } catch (e) {
         console.error("Failed to fetch live intersection details", e);
@@ -145,15 +160,44 @@ export default function Home() {
                 </div>
                 <div className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto">
                   <div className="w-full aspect-video bg-gray-900 rounded-xl flex items-center justify-center relative overflow-hidden shadow-inner group relative">
-                    {/* Simulated RTSP Live Traffic Feed using a 24/7 public intersection stream */}
-                    <iframe
-                      src={`https://www.youtube.com/embed/${selectedIntersection.videoId || "1EiC9bvVGnk"}?autoplay=1&mute=1&loop=1&playlist=${selectedIntersection.videoId || "1EiC9bvVGnk"}&controls=0&disablekb=1&fs=0&modestbranding=1`}
+                    {/* Simulated RTSP Live Traffic Feed controlled by Backend Stream Status */}
+                    <YouTube
+                      videoId={selectedIntersection.videoId || "1EiC9bvVGnk"}
+                      opts={{
+                        width: '100%',
+                        height: '100%',
+                        playerVars: {
+                          autoplay: streamActive ? 1 : 0, 
+                          mute: 1,
+                          loop: 1,
+                          playlist: selectedIntersection.videoId || "1EiC9bvVGnk",
+                          controls: 0,
+                          disablekb: 1,
+                          fs: 0,
+                          modestbranding: 1
+                        }
+                      }}
+                      onReady={(event) => {
+                        setPlayer(event.target);
+                        if (streamActive) event.target.playVideo();
+                        else event.target.pauseVideo();
+                      }}
                       className="absolute inset-0 w-full h-full scale-[1.3] pointer-events-none opacity-90 group-hover:opacity-100 transition-opacity"
-                      allow="autoplay; encrypted-media"
+                      iframeClassName="w-full h-full pointer-events-none"
                     />
+                    
+                    {/* Overlay when stream is inactive */}
+                    {!streamActive && (
+                      <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-gray-900/80 backdrop-blur-sm transition-all duration-300">
+                        <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-3 shadow-[0_0_15px_rgba(59,130,246,0.5)] rounded-full" />
+                        <p className="text-white font-bold tracking-widest uppercase text-sm">Awaiting Stream Data</p>
+                        <p className="text-gray-400 text-[10px] mt-1 uppercase tracking-wider">Syncing with Edge Node...</p>
+                      </div>
+                    )}
+
                     <div className="absolute top-4 left-4 flex gap-2 items-center z-10 bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/10">
-                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,1)]"></span>
-                      <span className="text-[10px] text-white uppercase tracking-wider font-bold">Live RTSP Feed</span>
+                      <span className={`w-2 h-2 rounded-full ${streamActive ? 'bg-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,1)]' : 'bg-gray-500'}`}></span>
+                      <span className="text-[10px] text-white uppercase tracking-wider font-bold">Live Camera Feed</span>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">

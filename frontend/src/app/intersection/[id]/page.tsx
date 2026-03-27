@@ -4,11 +4,12 @@ import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import {
   X, Phone, Shield, AlertTriangle,
-  Video, Lock, Unlock, Siren, CheckCircle, XCircle, Power, FileText
+  Video, Lock, Unlock, Siren, CheckCircle, XCircle, Power, FileText, Loader2
 } from "lucide-react";
-import { intersections, type IntersectionData } from "@/lib/intersections";
+import { intersections, DEMO_LANE_VIDEOS, type IntersectionData } from "@/lib/intersections";
 import AmbulanceModal from "@/components/AmbulanceModal";
 import { SearchBar, ProfileAlerts } from "@/components/Overlays";
+import YouTube from 'react-youtube';
 
 const MapComponent = dynamic(
   () => import("@/components/MapComponent"),
@@ -45,10 +46,18 @@ interface AuditEntry {
 }
 
 /* ── Camera Feed Placeholder ── */
-function CameraFeed({ lane, currentSignal, videoId }: { lane: LaneData; currentSignal: "RED" | "YEL" | "GRN"; videoId: string }) {
+function CameraFeed({ lane, currentSignal, videoId, streamActive }: { lane: LaneData; currentSignal: "RED" | "YEL" | "GRN"; videoId: string; streamActive: boolean }) {
   const isGreen = currentSignal === "GRN";
   const isYellow = currentSignal === "YEL";
   const signalLabel = currentSignal === "GRN" ? "GREEN" : currentSignal === "YEL" ? "YELLOW" : "RED";
+  const [player, setPlayer] = useState<any>(null);
+
+  useEffect(() => {
+    if (player) {
+      if (streamActive) player.playVideo();
+      else player.pauseVideo();
+    }
+  }, [streamActive, player]);
 
   return (
     <div className="flex flex-col">
@@ -59,11 +68,36 @@ function CameraFeed({ lane, currentSignal, videoId }: { lane: LaneData; currentS
           : "ring-2 ring-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
           }`}
       >
-        <iframe
-          src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&disablekb=1&fs=0&modestbranding=1`}
+        <YouTube
+          videoId={videoId}
+          opts={{
+            width: '100%',
+            height: '100%',
+            playerVars: {
+              autoplay: streamActive ? 1 : 0,
+              mute: 1,
+              loop: 1,
+              playlist: videoId,
+              controls: 0,
+              disablekb: 1,
+              fs: 0,
+              modestbranding: 1
+            }
+          }}
+          onReady={(event) => {
+            setPlayer(event.target);
+            if (streamActive) event.target.playVideo();
+            else event.target.pauseVideo();
+          }}
           className="absolute inset-0 w-full h-full scale-[1.3] pointer-events-none opacity-80 group-hover:opacity-100 transition-opacity"
-          allow="autoplay; encrypted-media"
+          iframeClassName="w-full h-full pointer-events-none"
         />
+        {!streamActive && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-gray-900/80 backdrop-blur-sm transition-all duration-300 rounded-xl">
+             <Loader2 className="w-5 h-5 text-blue-500 animate-spin mb-1" />
+             <p className="text-[9px] text-white font-bold tracking-widest uppercase mb-2">Waiting for Data</p>
+          </div>
+        )}
         <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 z-10 bg-black/50 px-2 py-1 rounded backdrop-blur-sm">
           <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isGreen ? "bg-green-500" : isYellow ? "bg-amber-400" : "bg-red-500"}`} />
           <span className="text-[9px] text-white/90 font-mono uppercase tracking-wider">{lane.direction} CAM</span>
@@ -506,9 +540,19 @@ export default function IntersectionPage() {
 
   // Live status from API
   const [liveStatus, setLiveStatus] = useState<string>("Green");
+  const [streamActive, setStreamActive] = useState<boolean>(false);
+  const [centerPlayer, setCenterPlayer] = useState<any>(null);
+
+  useEffect(() => {
+    if (centerPlayer) {
+      if (streamActive) centerPlayer.playVideo();
+      else centerPlayer.pauseVideo();
+    }
+  }, [streamActive, centerPlayer]);
 
   const id = params?.id as string;
   const intersection = intersections.find((i) => i.nodeId === id || i.id === Number(id));
+  const isDemoNode = intersection?.nodeId === DEMO_LANE_VIDEOS.NODE_ID;
 
   const showToast = useCallback((message: string, type: "success" | "error" | "warning") => {
     setToast({ message, type });
@@ -604,6 +648,11 @@ export default function IntersectionPage() {
           setAmbulanceDetectedDir(ambLane);
         } else {
           setAmbulanceDetectedDir(null);
+        }
+
+        // Activate stream when valid traffic data arrives (no separate endpoint needed)
+        if (data.lane_metrics && Object.keys(data.lane_metrics).length > 0 && !streamActive) {
+          setStreamActive(true);
         }
 
       } catch (err) {
@@ -835,10 +884,10 @@ export default function IntersectionPage() {
                   const density = laneDensities[dir] || "0%";
                   const lane = { direction: `Camera ${dir}`, density, waitTime: waitVal, greenTime: greenVal, signal: current as "RED" | "YEL" | "GRN" };
                   
-                  // Fallback IDs if they want 4 different angles
-                  const vidId = intersection.videoId || "1EiC9bvVGnk";
+                  // Use specific video if it's the 5-camera demo node
+                  const vidId = isDemoNode ? (DEMO_LANE_VIDEOS.LANES as any)[dir] || "1EiC9bvVGnk" : (intersection.videoId || "1EiC9bvVGnk");
                   return (
-                    <CameraFeed key={lane.direction} lane={lane} currentSignal={laneStates[dir]} videoId={vidId} />
+                    <CameraFeed key={lane.direction} lane={lane} currentSignal={laneStates[dir]} videoId={vidId} streamActive={streamActive} />
                   );
                 })}
               </div>
@@ -849,11 +898,36 @@ export default function IntersectionPage() {
               <p className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-widest font-semibold mb-3">Center Box Camera & Emergency Compass</p>
               <div className="flex gap-4 items-start">
                 <div className="flex-1 relative aspect-[16/7] bg-slate-900 rounded-xl flex items-center justify-center overflow-hidden shadow-sm group">
-                  <iframe
-                    src={`https://www.youtube.com/embed/${intersection.videoId || "1EiC9bvVGnk"}?autoplay=1&mute=1&loop=1&playlist=${intersection.videoId || "1EiC9bvVGnk"}&controls=0&disablekb=1&fs=0&modestbranding=1`}
+                  <YouTube
+                    videoId={isDemoNode ? DEMO_LANE_VIDEOS.CENTER : (intersection.videoId || "1EiC9bvVGnk")}
+                    opts={{
+                      width: '100%',
+                      height: '100%',
+                      playerVars: {
+                        autoplay: streamActive ? 1 : 0,
+                        mute: 1,
+                        loop: 1,
+                        playlist: isDemoNode ? DEMO_LANE_VIDEOS.CENTER : (intersection.videoId || "1EiC9bvVGnk"),
+                        controls: 0,
+                        disablekb: 1,
+                        fs: 0,
+                        modestbranding: 1
+                      }
+                    }}
+                    onReady={(event) => {
+                      setCenterPlayer(event.target);
+                        if (streamActive) event.target.playVideo();
+                        else event.target.pauseVideo();
+                    }}
                     className="absolute inset-0 w-full h-full scale-[1.3] pointer-events-none opacity-80 group-hover:opacity-100 transition-opacity"
-                    allow="autoplay; encrypted-media"
+                    iframeClassName="w-full h-full pointer-events-none"
                   />
+                  {!streamActive && (
+                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-gray-900/80 backdrop-blur-sm transition-all duration-300">
+                      <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-2" />
+                      <p className="text-white font-bold tracking-widest uppercase text-xs">Awaiting Stream Data</p>
+                    </div>
+                  )}
                   <div className="absolute top-3 left-3 flex items-center gap-2 z-10 bg-black/60 px-3 py-1.5 rounded-lg backdrop-blur-sm border border-white/10">
                     <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_6px_rgba(239,68,68,0.8)]" />
                     <span className="text-[10px] text-white/90 font-mono uppercase tracking-widest font-bold">Center PTZ Live</span>

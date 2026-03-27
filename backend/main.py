@@ -28,6 +28,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Global Stream Status
+STREAM_ACTIVE = False
+
 # --- MQTT BACKGROUND WORKER ---
 MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
@@ -38,6 +41,7 @@ def on_mqtt_connect(client, userdata, flags, reason_code, properties):
     client.subscribe(MQTT_TOPIC)
 
 def on_mqtt_message(client, userdata, msg):
+    global STREAM_ACTIVE
     try:
         payload_str = msg.payload.decode("utf-8")
         raw_data = json.loads(payload_str)
@@ -45,6 +49,11 @@ def on_mqtt_message(client, userdata, msg):
         node_id = raw_data.get("nodeId")
         if not node_id:
             return
+            
+        # First payload received, trigger the global video stream
+        if not STREAM_ACTIVE:
+            STREAM_ACTIVE = True
+            print(f"[{datetime.datetime.utcnow().isoformat()}] FIRST PAYLOAD TRIGGER: STREAM_ACTIVE = True")
             
         events = raw_data.get("critical_events_this_minus_cycle") or raw_data.get("critical_events_this_minute", {})
         db = database.SessionLocal()
@@ -146,6 +155,11 @@ def ingest_traffic(data: TrafficPayload, db: Session = Depends(database.get_db))
     Endpoint for Jetson devices to send real-time traffic inference results.
     Saves the metrics to PostgreSQL.
     """
+    global STREAM_ACTIVE
+    if not STREAM_ACTIVE:
+        STREAM_ACTIVE = True
+        print(f"[{datetime.datetime.utcnow().isoformat()}] FIRST HTTP PAYLOAD TRIGGER: STREAM_ACTIVE = True")
+
     events = data.critical_events_this_minus_cycle or data.critical_events_this_minute
     if not events:
         events = CriticalEvents(evp_overrides=0, gridlock_triggers=0)
@@ -274,6 +288,11 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
         "lane_metrics": record.lane_metrics,
         "critical_events": record.critical_events_this_minute
     }
+
+@app.get("/api/stream-status")
+def get_stream_status():
+    """Endpoint for frontend to poll if actual camera simulation data has started arriving"""
+    return {"active": STREAM_ACTIVE}
 
 if __name__ == "__main__":
     import uvicorn
