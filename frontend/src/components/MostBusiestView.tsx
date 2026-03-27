@@ -23,26 +23,45 @@ export default function MostBusiestView({ setActiveTab }: { setActiveTab?: (tab:
         if (!res.ok) return;
         const liveData: any[] = await res.json();
         
-        const dynamicList = liveData.map((live: any) => {
-          // Look up intersection details if exist
-          const staticMatch = intersections.find(i => i.nodeId === live.nodeId);
-          return {
-            rank: 0, // Assigned later
-            name: staticMatch ? staticMatch.name : `Node ${live.nodeId}`,
-            nodeId: live.nodeId,
-            avgVehicles: live.vehiclesPassed || 0,
-            peakVehicles: Math.max(live.vehiclesPassed || 0, 1000), // Mock peak for UI stability
-            peakTime: "Live",
-            avgWait: `${live.avgWaitTime} min`,
-            trend: live.congestionLevel > 0.5 ? "up" : "down",
-            change: "N/A",
-            status: live.status || "Green"
-          };
+        // Always map over the full set of 25 intersections
+        const fullList = intersections.map((node) => {
+          const live = liveData.find((l: any) => l.nodeId === node.nodeId);
+          
+          if (live) {
+            return {
+              rank: 0,
+              name: node.name,
+              nodeId: node.nodeId,
+              avgVehicles: live.vehiclesPassed || 0,
+              peakVehicles: Math.max(live.vehiclesPassed || 0, 1000),
+              peakTime: "Live",
+              avgWait: `${live.avgWaitTime} min`,
+              trend: live.congestionLevel > 0.5 ? "up" : "down",
+              change: "N/A",
+              status: live.status || "Green"
+            };
+          } else {
+            // Deterministic mock fallback for nodes not in DB
+            const seed = parseInt(node.nodeId.slice(-3)) || 100;
+            const mockVehicles = 2500 + (seed * 40);
+            return {
+              rank: 0,
+              name: node.name,
+              nodeId: node.nodeId,
+              avgVehicles: mockVehicles,
+              peakVehicles: Math.floor(mockVehicles * 1.4),
+              peakTime: "Scheduled",
+              avgWait: `${Math.floor(seed / 10) + 5} min`,
+              trend: "down",
+              change: "Steady",
+              status: "Green"
+            };
+          }
         });
 
-        // Re-sort by avgVehicles and assign ranks
-        dynamicList.sort((a, b) => b.avgVehicles - a.avgVehicles);
-        const rankedList = dynamicList.map((item, idx) => ({ ...item, rank: idx + 1 }));
+        // Re-sort the combined list by volume
+        fullList.sort((a, b) => b.avgVehicles - a.avgVehicles);
+        const rankedList = fullList.map((item, idx) => ({ ...item, rank: idx + 1 }));
         
         setBusiestIntersections(rankedList);
         setLoading(false);
