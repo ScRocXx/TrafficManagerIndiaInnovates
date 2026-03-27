@@ -5,6 +5,8 @@ export interface IntersectionData {
   lat: number;
   lng: number;
   videoId: string;
+  status?: string;
+  p?: number;
 }
 
 const DEMO_VIDEOS = [

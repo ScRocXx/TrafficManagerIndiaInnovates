@@ -59,7 +59,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
   const intersectionData = React.useMemo(() => {
     return intersections.map((intersection, idx) => {
       const node = nodes[idx] || null;
-      let avgDensity = intersection.p * 100;
+      let avgDensity = (intersection.p || 0) * 100;
       
       if (node) {
         const laneDensities = Object.values(node.lanes).map(l => l.density);
@@ -85,10 +85,10 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
       return {
         id: `INT-${idx + 1}`,
         name: intersection.name,
-        status: intersection.status as any,
+        status: (intersection.status || "Green") as any,
         peakHour: PEAK_TIMES[idx] || "6:00 PM",
         peakVolume: Math.round(peakDensity),
-        avgPValue: intersection.p,
+        avgPValue: intersection.p || 0,
         maxCongestionHrs: MAX_CONGESTION_MINS[idx] || 25,
         clearanceWindow: intersection.status === "Red" ? "1 AM – 4 AM" : "10 PM – 5 AM",
         hourlyData
