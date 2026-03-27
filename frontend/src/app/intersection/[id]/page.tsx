@@ -687,12 +687,17 @@ export default function IntersectionPage() {
           const laneSuffix = laneId.split("-").pop() || "01";
           setAmbulanceDetectedDir(laneSuffix);
           setAmbulanceAlertData(data.ambulance_alert);
-        } else if (currentEvp === 0 && ambulanceDetectedDir) {
-          // Auto-clear ambulance alert when traffic payload shows evp_overrides back to 0
-          setAmbulanceDetectedDir(null);
-          setAmbulanceAlertData(null);
-          setShowAmbulanceModal(false);
-          ambulanceDismissedRef.current = false; // reset so next alert can open modal
+        } else {
+          // No active alert from backend — always clear frontend state
+          // (uses setter callback to avoid stale closure on ambulanceDetectedDir)
+          setAmbulanceDetectedDir((prev) => {
+            if (prev !== null) {
+              setAmbulanceAlertData(null);
+              setShowAmbulanceModal(false);
+              ambulanceDismissedRef.current = false;
+            }
+            return null;
+          });
         }
 
         setLiveStatus(data.status === "FAULT_OFFLINE" ? "Red" : (data.status || "Green"));
