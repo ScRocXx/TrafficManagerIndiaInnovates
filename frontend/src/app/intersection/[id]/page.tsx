@@ -566,6 +566,8 @@ export default function IntersectionPage() {
   }, []);
 
   const prevPhaseRef = useRef<string>("");
+  const lanePhaseStartTimes = useRef<Record<string, number>>({});
+  const laneInitialDurations = useRef<Record<string, number>>({});
 
   useEffect(() => {
     if (!intersection?.nodeId) return;
@@ -595,10 +597,13 @@ export default function IntersectionPage() {
              const gt = data.state_snapshot?.green_timer;
              const elapsed = data.state_snapshot?.total_green_elapsed || 0;
              if (typeof gt === "number" && phaseChanged) {
-               // Only seed the countdown when the light physically changes to green.
-               // This guarantees a perfectly smooth local countdown without network snapbacks.
-               setLaneGreenTimers(prev => ({ ...prev, [mappedDir]: Math.max(0, gt - elapsed) }));
-             }
+                // Only seed the countdown when the light physically changes to green.
+                // This guarantees a perfectly smooth local countdown without network snapbacks.
+                const initial = Math.max(0, gt - elapsed);
+                setLaneGreenTimers(prev => ({ ...prev, [mappedDir]: initial }));
+                lanePhaseStartTimes.current[mappedDir] = Date.now();
+                laneInitialDurations.current[mappedDir] = initial;
+              }
           }
         }
         
@@ -683,9 +688,15 @@ export default function IntersectionPage() {
       
       setLaneGreenTimers(prev => {
         const n: Record<string, number> = { ...prev };
+        const now = Date.now();
         for (const dir in laneStates) {
-          if (laneStates[dir] === "GRN" && (n[dir] || 0) > 0) {
-            n[dir]--;
+          if (laneStates[dir] === "GRN") {
+            const startTime = lanePhaseStartTimes.current[dir];
+            const duration = laneInitialDurations.current[dir];
+            if (startTime && duration) {
+               const elapsed = (now - startTime) / 1000;
+               n[dir] = Math.max(0, Math.ceil(duration - elapsed));
+            }
           }
         }
         return n;
@@ -703,7 +714,7 @@ export default function IntersectionPage() {
         }
         return n;
       });
-    }, 1000);
+    }, 100); // 100ms for high precision
     return () => clearInterval(tick);
   }, [laneActive, codeRed, laneStates]);
 
@@ -793,8 +804,11 @@ export default function IntersectionPage() {
     });
 
     if (targetState === "GRN") {
-      setLaneGreenTimers(p => ({ ...p, [dir]: 45 }));
+      const duration = 45;
+      setLaneGreenTimers(p => ({ ...p, [dir]: duration }));
       setLaneWaitTimers(p => ({ ...p, [dir]: 0 }));
+      lanePhaseStartTimes.current[dir] = Date.now();
+      laneInitialDurations.current[dir] = duration;
     }
 
     // Send Jetson API Call
