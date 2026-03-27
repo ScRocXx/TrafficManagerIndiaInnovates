@@ -601,20 +601,20 @@ export default function IntersectionPage() {
           const mappedDir = suffix || "01";
           
           let engineState = data.state_snapshot?.engine_state || "BASE_GREEN";
+          const gt = data.state_snapshot?.green_timer !== undefined ? data.state_snapshot.green_timer : 30;
+          const elapsed = data.state_snapshot?.total_green_elapsed !== undefined ? data.state_snapshot.total_green_elapsed : 0;
+
+          if (phaseChanged) {
+             const initial = Math.max(0, gt - elapsed);
+             setLaneGreenTimers(prev => ({ ...prev, [mappedDir]: initial }));
+             lanePhaseStartTimes.current[mappedDir] = Date.now();
+             laneInitialDurations.current[mappedDir] = initial;
+          }
+
           if (engineState.includes("YELLOW") || engineState.includes("YEL")) {
              newLaneStates[mappedDir] = "YEL";
           } else {
              newLaneStates[mappedDir] = "GRN";
-             const gt = data.state_snapshot?.green_timer;
-             const elapsed = data.state_snapshot?.total_green_elapsed || 0;
-             if (typeof gt === "number" && phaseChanged) {
-                // Only seed the countdown when the light physically changes to green.
-                // This guarantees a perfectly smooth local countdown without network snapbacks.
-                const initial = Math.max(0, gt - elapsed);
-                setLaneGreenTimers(prev => ({ ...prev, [mappedDir]: initial }));
-                lanePhaseStartTimes.current[mappedDir] = Date.now();
-                laneInitialDurations.current[mappedDir] = initial;
-              }
           }
         }
         setLaneStates(newLaneStates as Record<string, "RED" | "YEL" | "GRN">);
@@ -732,16 +732,43 @@ export default function IntersectionPage() {
         const n: Record<string, number> = { ...prev };
         const now = Date.now();
         for (const dir in laneStates) {
-          if (laneStates[dir] === "GRN") {
+          if (laneStates[dir] === "GRN" || laneStates[dir] === "YEL") {
             const startTime = lanePhaseStartTimes.current[dir];
             const duration = laneInitialDurations.current[dir];
-            if (startTime && duration) {
-               const elapsed = (now - startTime) / 1000;
-               n[dir] = Math.max(0, Math.ceil(duration - elapsed));
+            if (startTime && duration !== undefined) {
+               const elapsedSec = (now - startTime) / 1000;
+               n[dir] = Math.max(0, Math.ceil(duration - elapsedSec));
             }
+          } else {
+             // Red lanes don't display green timer
+             n[dir] = 0;
           }
         }
         return n;
+      });
+
+      // Auto-transition to YELLOW on frontend when green timer <= 5s
+      setLaneStates(prevStates => {
+         let changed = false;
+         const newStates = { ...prevStates };
+         for (const dir in newStates) {
+            if (newStates[dir] === "GRN") {
+               const startTime = lanePhaseStartTimes.current[dir];
+               const duration = laneInitialDurations.current[dir];
+               if (startTime && duration !== undefined) {
+                  const elapsedSec = (Date.now() - startTime) / 1000;
+                  const remaining = duration - elapsedSec;
+                  if (remaining <= 5 && remaining > 0) {
+                     newStates[dir] = "YEL";
+                     changed = true;
+                  } else if (remaining <= 0) {
+                     newStates[dir] = "RED";
+                     changed = true;
+                  }
+               }
+            }
+         }
+         return changed ? newStates : prevStates;
       });
 
       // Wait timers: tick UP for RED lanes (accumulating wait time), reset for GREEN
@@ -979,8 +1006,8 @@ export default function IntersectionPage() {
                   const current = codeRed ? "RED" : laneStates[dir];
                   const isFallback = systemMode === "LEGACY_MICROCONTROLLER";
                   
-                  const waitVal = isFallback ? "60s (Fixed)" : (current === "RED" ? `${Math.floor(laneWaitTimers[dir])}s (Dynamic)` : "0s");
-                  const greenVal = isFallback ? "30s (Static)" : (current === "GRN" ? `${laneGreenTimers[dir]}s (Adaptive)` : "—");
+                  const waitVal = isFallback ? "60s (Fixed)" : (current === "RED" ? `${Math.floor(laneWaitTimers[dir] || 0)}s` : "0s");
+                  const greenVal = isFallback ? "30s (Static)" : (current === "GRN" || current === "YEL" ? `${laneGreenTimers[dir] ?? 0}s` : "—");
                   const density = isFallback ? "N/A (Sensor Fault)" : (laneDensities[dir] || "0 Vehicles");
                   
                   const lane = { direction: `Camera ${dir}`, density, waitTime: waitVal, greenTime: greenVal, signal: current as "RED" | "YEL" | "GRN" };
