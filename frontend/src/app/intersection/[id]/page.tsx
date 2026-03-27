@@ -498,7 +498,7 @@ export default function IntersectionPage() {
   const [showAmbulanceModal, setShowAmbulanceModal] = useState(false);
   const [ambulanceDetectedDir, setAmbulanceDetectedDir] = useState<string | null>(null);
   const [ambulanceAlertData, setAmbulanceAlertData] = useState<any>(null);
-  const ambulanceDismissedRef = useRef<string | null>(null); // tracks dismissed alert timestamp to prevent re-open
+  const ambulanceDismissedRef = useRef<boolean>(false); // once user closes, stays true until alert stream clears
   const [toast, setToast] = useState<ToastData | null>(null);
 
   // Lane states
@@ -681,14 +681,14 @@ export default function IntersectionPage() {
           setAmbulanceDetectedDir(laneSuffix);
           setAmbulanceAlertData(data.alert);
 
-          // Only auto-open the modal if the user hasn't dismissed this specific alert
-          if (ambulanceDismissedRef.current !== data.alert.timestamp) {
+          // Only auto-open the modal ONCE. After user dismisses, never re-open until alert fully clears.
+          if (!ambulanceDismissedRef.current) {
             setShowAmbulanceModal(true);
           }
         } else {
           setAmbulanceDetectedDir(null);
           setAmbulanceAlertData(null);
-          ambulanceDismissedRef.current = null; // reset dismissed tracker when alert clears
+          ambulanceDismissedRef.current = false; // alert stream ended, allow next alert to open modal
         }
       } catch (e) {
         // Silently fail — ambulance polling is non-critical
@@ -852,10 +852,8 @@ export default function IntersectionPage() {
   };
 
   const handleCloseAmbulance = async () => {
-    // Mark this alert as dismissed so the polling loop won't re-open the modal
-    if (ambulanceAlertData?.timestamp) {
-      ambulanceDismissedRef.current = ambulanceAlertData.timestamp;
-    }
+    // Block the polling loop from ever re-opening the modal for this alert
+    ambulanceDismissedRef.current = true;
     setShowAmbulanceModal(false);
 
     // Also clear the alert on the backend
