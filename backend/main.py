@@ -41,23 +41,13 @@ MQTT_TOPIC = "mcd/traffic/#"
 def on_mqtt_connect(client, userdata, flags, reason_code, properties):
     print(f"[{datetime.datetime.utcnow().isoformat()}] Connected to HiveMQ Broker!")
     client.subscribe("mcd/traffic/#")
-    client.subscribe("mcd/alerts/#")
-    print(f"[{datetime.datetime.utcnow().isoformat()}] Subscribed to mcd/traffic/# and mcd/alerts/#")
 
 def on_mqtt_message(client, userdata, msg):
-    global STREAM_ACTIVE, LAST_SEEN_NODES, AMBULANCE_ALERTS
+    global STREAM_ACTIVE, LAST_SEEN_NODES
     try:
         topic = msg.topic
         payload_str = msg.payload.decode("utf-8")
         raw_data = json.loads(payload_str)
-
-        # Handle Alerts Topic
-        if "mcd/alerts/" in topic:
-            node_id = raw_data.get("deviceId")
-            if node_id:
-                AMBULANCE_ALERTS[node_id] = raw_data
-                print(f"[{datetime.datetime.utcnow().isoformat()}] EVP ALERT: Ambulance detected for {node_id}")
-            return
         
         node_id = raw_data.get("nodeId")
         if not node_id:
@@ -319,8 +309,6 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
         if seconds_since > 20:
             is_offline = True
 
-    ambulance = AMBULANCE_ALERTS.get(node_id)
-
     return {
         "nodeId": record.node_id,
         "timestamp": record.timestamp.isoformat(),
@@ -328,24 +316,13 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
         "lane_metrics": record.lane_metrics,
         "critical_events": record.critical_events_this_minute,
         "status": "FAULT_OFFLINE" if is_offline else "ONLINE",
-        "systemMode": "LEGACY_MICROCONTROLLER" if is_offline else ("EVP_OVERRIDE" if ambulance else "AI_OPTIMIZED"),
-        "ambulance_detected": True if ambulance else False,
-        "ambulance_data": ambulance
+        "systemMode": "LEGACY_MICROCONTROLLER" if is_offline else "AI_OPTIMIZED",
     }
 
 @app.get("/api/stream-status")
 def get_stream_status():
     """Endpoint for frontend to poll if actual camera simulation data has started arriving"""
     return {"active": STREAM_ACTIVE}
-
-@app.post("/api/clear-ambulance")
-def clear_ambulance(data: dict):
-    """Endpoint to clear an existing ambulance alert for a node"""
-    node_id = data.get("nodeId")
-    if node_id in AMBULANCE_ALERTS:
-        del AMBULANCE_ALERTS[node_id]
-        print(f"[{datetime.datetime.utcnow().isoformat()}] EVP CLEAR: Alert cleared for {node_id}")
-    return {"success": True}
 
 if __name__ == "__main__":
     import uvicorn

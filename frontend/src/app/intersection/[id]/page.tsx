@@ -606,17 +606,13 @@ export default function IntersectionPage() {
               }
           }
         }
-        
-        // Handle EVP Override logic in frontend UI
-        if (data.systemMode === "EVP_OVERRIDE" && data.ambulance_detected) {
-          const ambLane = data.ambulance_data?.lane_id?.split("-").pop() || "01";
-          Object.keys(newLaneStates).forEach(k => {
-             newLaneStates[k] = k === ambLane ? "GRN" : "RED";
-          });
-          if (!showAmbulanceModal) setShowAmbulanceModal(true);
+        // Native EVP matching: Jetson sends evp_overrides > 0 when an ambulance is overriding the cycle.
+        // We match it to the currently active phase.
+        if ((data.critical_events?.evp_overrides || 0) > 0) {
+          const ambLane = data.state_snapshot?.active_phase?.split("-").pop() || "01";
           setAmbulanceDetectedDir(ambLane);
         } else {
-           setAmbulanceDetectedDir(null);
+          setAmbulanceDetectedDir(null);
         }
 
         setLaneStates(newLaneStates as Record<string, "RED" | "YEL" | "GRN">);
@@ -826,20 +822,8 @@ export default function IntersectionPage() {
     showToast(`${dir} manually set to ${targetState}`, "success");
   };
 
-  const handleCloseAmbulance = async () => {
-    try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
-      await fetch(`${API_URL}/api/clear-ambulance`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nodeId: intersection?.nodeId })
-      });
-      setShowAmbulanceModal(false);
-      setAmbulanceDetectedDir(null);
-      showToast("Emergency Priority Cleared", "success");
-    } catch (e) {
-      console.error("Failed to clear ambulance", e);
-    }
+  const handleCloseAmbulance = () => {
+    setShowAmbulanceModal(false);
   };
 
   /* ── Override toggle ── */
