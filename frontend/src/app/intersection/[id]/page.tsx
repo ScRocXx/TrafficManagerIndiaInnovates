@@ -707,7 +707,7 @@ export default function IntersectionPage() {
         const n: Record<string, number> = { ...prev };
         for (const dir in laneStates) {
           if (laneStates[dir] === "RED") {
-            n[dir] = (n[dir] || 0) + 1;  // Counting up while vehicles wait
+            n[dir] = (n[dir] || 0) + 0.1;  // Accumulate correctly at 100ms interval
           } else if (laneStates[dir] === "GRN") {
             n[dir] = 0; // Green = no wait
           }
@@ -913,9 +913,12 @@ export default function IntersectionPage() {
               <div className="grid grid-cols-2 gap-3">
                 {["01", "02", "03", "04"].map((dir, idx) => {
                   const current = codeRed ? "RED" : laneStates[dir];
-                  const waitVal = current === "RED" ? `${laneWaitTimers[dir]}s` : "0s";
-                  const greenVal = current === "GRN" ? `${laneGreenTimers[dir]}s` : "—";
-                  const density = laneDensities[dir] || "0%";
+                  const isFallback = systemMode === "LEGACY_MICROCONTROLLER";
+                  
+                  const waitVal = isFallback ? "--" : (current === "RED" ? `${Math.floor(laneWaitTimers[dir])}s` : "0s");
+                  const greenVal = isFallback ? "--" : (current === "GRN" ? `${laneGreenTimers[dir]}s` : "—");
+                  const density = isFallback ? "--" : (laneDensities[dir] || "0%");
+                  
                   const lane = { direction: `Camera ${dir}`, density, waitTime: waitVal, greenTime: greenVal, signal: current as "RED" | "YEL" | "GRN" };
                   
                   // Use specific video if it's the 5-camera demo node
