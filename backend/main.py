@@ -41,13 +41,26 @@ MQTT_TOPIC = "mcd/traffic/#"
 def on_mqtt_connect(client, userdata, flags, reason_code, properties):
     print(f"[{datetime.datetime.utcnow().isoformat()}] Connected to HiveMQ Broker!")
     client.subscribe("mcd/traffic/#")
+    client.subscribe("mcd/alerts/#")
+    print(f"[{datetime.datetime.utcnow().isoformat()}] Subscribed to mcd/traffic/# and mcd/alerts/#")
 
 def on_mqtt_message(client, userdata, msg):
-    global STREAM_ACTIVE, LAST_SEEN_NODES
+    global STREAM_ACTIVE, LAST_SEEN_NODES, AMBULANCE_ALERTS
     try:
         topic = msg.topic
         payload_str = msg.payload.decode("utf-8")
         raw_data = json.loads(payload_str)
+
+        # --- Dedicated Ambulance Alert Handler (separate from traffic) ---
+        if topic.startswith("mcd/alerts/"):
+            device_id = raw_data.get("deviceId")
+            if device_id:
+                AMBULANCE_ALERTS[device_id] = {
+                    **raw_data,
+                    "received_at": datetime.datetime.utcnow().isoformat()
+                }
+                print(f"[{datetime.datetime.utcnow().isoformat()}] EVP ALERT RECEIVED: {raw_data.get('alert_type')} for node {device_id}")
+            return  # Do NOT process further — this is not traffic data
         
         node_id = raw_data.get("nodeId")
         if not node_id:
@@ -323,6 +336,22 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
 def get_stream_status():
     """Endpoint for frontend to poll if actual camera simulation data has started arriving"""
     return {"active": STREAM_ACTIVE}
+
+@app.get("/api/ambulance-alerts/{node_id}")
+def get_ambulance_alert(node_id: str):
+    """Dedicated endpoint for ambulance alerts — completely separate from /api/traffic"""
+    alert = AMBULANCE_ALERTS.get(node_id)
+    if alert:
+        return {"active": True, "alert": alert}
+    return {"active": False, "alert": None}
+
+@app.post("/api/ambulance-alerts/{node_id}/clear")
+def clear_ambulance_alert(node_id: str):
+    """Clear an ambulance alert after operator acknowledgement"""
+    if node_id in AMBULANCE_ALERTS:
+        del AMBULANCE_ALERTS[node_id]
+        print(f"[{datetime.datetime.utcnow().isoformat()}] EVP CLEAR: Alert cleared for node {node_id}")
+    return {"success": True}
 
 if __name__ == "__main__":
     import uvicorn

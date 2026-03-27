@@ -497,6 +497,8 @@ export default function IntersectionPage() {
   const router = useRouter();
   const [showAmbulanceModal, setShowAmbulanceModal] = useState(false);
   const [ambulanceDetectedDir, setAmbulanceDetectedDir] = useState<string | null>(null);
+  const [ambulanceAlertData, setAmbulanceAlertData] = useState<any>(null);
+  const ambulanceDismissedRef = useRef<string | null>(null); // tracks dismissed alert timestamp to prevent re-open
   const [toast, setToast] = useState<ToastData | null>(null);
 
   // Lane states
@@ -606,15 +608,6 @@ export default function IntersectionPage() {
               }
           }
         }
-        // Native EVP matching: Jetson sends evp_overrides > 0 when an ambulance is overriding the cycle.
-        // We match it to the currently active phase.
-        if ((data.critical_events?.evp_overrides || 0) > 0) {
-          const ambLane = data.state_snapshot?.active_phase?.split("-").pop() || "01";
-          setAmbulanceDetectedDir(ambLane);
-        } else {
-          setAmbulanceDetectedDir(null);
-        }
-
         setLaneStates(newLaneStates as Record<string, "RED" | "YEL" | "GRN">);
         
         if (data.lane_metrics) {
@@ -669,6 +662,42 @@ export default function IntersectionPage() {
     fetchTraffic();
     const interval = setInterval(fetchTraffic, 1500);
     return () => clearInterval(interval);
+  }, [intersection]);
+
+  // --- Dedicated Ambulance Alert Polling (completely separate from traffic) ---
+  useEffect(() => {
+    if (!intersection?.nodeId) return;
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+
+    const fetchAmbulanceAlert = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/ambulance-alerts/${intersection.nodeId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.active && data.alert) {
+          const laneId = data.alert.lane_id || "";
+          const laneSuffix = laneId.split("-").pop() || "01";
+          setAmbulanceDetectedDir(laneSuffix);
+          setAmbulanceAlertData(data.alert);
+
+          // Only auto-open the modal if the user hasn't dismissed this specific alert
+          if (ambulanceDismissedRef.current !== data.alert.timestamp) {
+            setShowAmbulanceModal(true);
+          }
+        } else {
+          setAmbulanceDetectedDir(null);
+          setAmbulanceAlertData(null);
+          ambulanceDismissedRef.current = null; // reset dismissed tracker when alert clears
+        }
+      } catch (e) {
+        // Silently fail — ambulance polling is non-critical
+      }
+    };
+
+    fetchAmbulanceAlert();
+    const ambInterval = setInterval(fetchAmbulanceAlert, 2000);
+    return () => clearInterval(ambInterval);
   }, [intersection]);
 
   // Global Tick for Timers
@@ -822,8 +851,20 @@ export default function IntersectionPage() {
     showToast(`${dir} manually set to ${targetState}`, "success");
   };
 
-  const handleCloseAmbulance = () => {
+  const handleCloseAmbulance = async () => {
+    // Mark this alert as dismissed so the polling loop won't re-open the modal
+    if (ambulanceAlertData?.timestamp) {
+      ambulanceDismissedRef.current = ambulanceAlertData.timestamp;
+    }
     setShowAmbulanceModal(false);
+
+    // Also clear the alert on the backend
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+      await fetch(`${API_URL}/api/ambulance-alerts/${intersection?.nodeId}/clear`, { method: "POST" });
+    } catch (e) {
+      // non-critical
+    }
   };
 
   /* ── Override toggle ── */
