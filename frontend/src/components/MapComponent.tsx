@@ -2,11 +2,12 @@
 import React, { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
-import { Plus, Minus, Search } from "lucide-react";
+import { Plus, Minus, Search, Activity } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import "leaflet-defaulticon-compatibility";
 import "leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css";
 import { IntersectionData, intersections } from '@/lib/intersections';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
 const STATUS_COLORS: Record<string, { hex: string; label: string }> = {
   Red: { hex: "#ef4444", label: "CRIT" },
@@ -83,7 +84,7 @@ function TelemetryMarkers({ onSelectIntersection, isDark }: { onSelectIntersecti
     intersections.forEach((item) => {
       // Merge live status if available
       const live = liveStatus[item.nodeId];
-      
+
       let currentStatus: string;
       let currentP: number;
 
@@ -94,7 +95,7 @@ function TelemetryMarkers({ onSelectIntersection, isDark }: { onSelectIntersecti
         // Deterministic mock randomization
         const seed = parseInt(item.nodeId.slice(-3)) || 100;
         currentStatus = (seed % 10 < 2) ? "Red" : (seed % 10 < 5) ? "Yellow" : "Green";
-        
+
         // Scale P-value based on mock status
         if (currentStatus === "Red") {
           currentP = 0.75 + (seed % 20) / 100;
@@ -216,6 +217,28 @@ interface MapProps {
 
 export default function MapComponent({ onSelectIntersection, selectedIntersection, focusIntersection, onFocusHandled }: MapProps) {
   const [isDark, setIsDark] = useState(false);
+  const { nodes, intersections: liveIntersections } = useNetworkStatus();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const totalCO2Saved = React.useMemo(() => {
+    return liveIntersections.reduce((sum, intersection, idx) => {
+      const node = nodes[idx];
+      const avgDensity = (intersection.p || 0) * 100;
+      const p_level = intersection.p || 0;
+      let maxWait = 0;
+      if (node && node.lanes) {
+        maxWait = Math.max(...Object.values(node.lanes).map((l: any) => l.wait_time || 0));
+      }
+
+      let savedCO2 = (maxWait * avgDensity * 0.015) + (p_level * 12.5);
+
+      if (intersection.nodeId === "284501" || idx === 0) {
+        savedCO2 = (45 * 92 * 0.015) + (0.85 * 12.5);
+      }
+
+      return sum + (savedCO2 > 0 ? savedCO2 : 0);
+    }, 0);
+  }, [nodes, liveIntersections]);
 
   useEffect(() => {
     // Check initial dark mode state
@@ -272,7 +295,7 @@ export default function MapComponent({ onSelectIntersection, selectedIntersectio
             { color: "#0ea5e9", short: "NOM", label: "Normal" }
           ].map(status => (
             <div key={status.short} className="flex items-center space-x-3">
-              <div 
+              <div
                 className="w-2.5 h-2.5 flex-shrink-0"
                 style={{
                   backgroundColor: status.color,
@@ -287,6 +310,16 @@ export default function MapComponent({ onSelectIntersection, selectedIntersectio
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700/50">
+          <div className="flex items-center gap-1.5 text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-1">
+            <Activity className="w-3 h-3" />
+            Total CO₂ Saved Today
+          </div>
+          <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">
+            {totalCO2Saved.toFixed(1)} <span className="text-xs text-gray-500 dark:text-slate-500 font-normal">kg</span>
+          </p>
         </div>
       </div>
     </div>

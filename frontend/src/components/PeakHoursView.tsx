@@ -28,7 +28,7 @@ interface IntersectionPeakData {
   status: "Red" | "Yellow" | "Green";
   peakHour: string;
   peakVolume: number;
-  avgPValue: number;
+  savedCO2: number;
   maxCongestionHrs: number;
   clearanceWindow: string;
   hourlyData: { hour: string; density: number }[];
@@ -60,7 +60,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
     return intersections.map((intersection, idx) => {
       const node = nodes[idx] || null;
       let avgDensity = (intersection.p || 0) * 100;
-      
+
       // Real data profile for Active / Hero Node (ITO Junction)
       if (intersection.nodeId === "284501" || idx === 0) {
         return {
@@ -69,7 +69,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
           status: intersection.status as any,
           peakHour: "9:00 AM",
           peakVolume: 92,
-          avgPValue: 0.85,
+          savedCO2: (45 * 92 * 0.015) + (0.85 * 12.5),
           maxCongestionHrs: 38,
           clearanceWindow: "1 AM - 4 AM",
           hourlyData: [
@@ -93,26 +93,26 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
       if (peakStr.includes("AM") && peakHourNum === 12) peakHourNum = 0;
 
       const secondaryPeak = (peakHourNum >= 12) ? peakHourNum - 9 : peakHourNum + 9;
-      
+
       // Decouple from live scale to prevent flatlining when live is 100%
       const nodeBaseScale = 50 + (idx % 30); // 50-80% base height
 
       const hourlyData = [6, 8, 10, 12, 14, 16, 18, 20, 22].map(hour => {
-         const dist1 = Math.abs(hour - peakHourNum);
-         const dist2 = Math.abs(hour - secondaryPeak);
+        const dist1 = Math.abs(hour - peakHourNum);
+        const dist2 = Math.abs(hour - secondaryPeak);
 
-         // Narrower Gaussian curves (Sigma 1.5)
-         const val1 = Math.exp(-0.5 * Math.pow(dist1 / 1.5, 2));
-         const val2 = Math.exp(-0.5 * Math.pow(dist2 / 2.0, 2)) * 0.7;
-         const noise = Math.abs(Math.sin((idx + 1) * hour)) * 0.15;
+        // Narrower Gaussian curves (Sigma 1.5)
+        const val1 = Math.exp(-0.5 * Math.pow(dist1 / 1.5, 2));
+        const val2 = Math.exp(-0.5 * Math.pow(dist2 / 2.0, 2)) * 0.7;
+        const noise = Math.abs(Math.sin((idx + 1) * hour)) * 0.15;
 
-         const mult = Math.max(val1, val2) + noise + 0.10;
-         
-         let finalDensity = nodeBaseScale * mult * 1.5;
-         if (finalDensity > 95) finalDensity = 95 - noise * 10;
-         
-         const label = hour === 12 ? "12PM" : hour > 12 ? `${hour - 12}PM` : `${hour}AM`;
-         return { hour: label, density: Math.max(5, finalDensity) };
+        const mult = Math.max(val1, val2) + noise + 0.10;
+
+        let finalDensity = nodeBaseScale * mult * 1.5;
+        if (finalDensity > 95) finalDensity = 95 - noise * 10;
+
+        const label = hour === 12 ? "12PM" : hour > 12 ? `${hour - 12}PM` : `${hour}AM`;
+        return { hour: label, density: Math.max(5, finalDensity) };
       });
 
       const peakDensity = Math.max(...hourlyData.map(h => h.density));
@@ -124,7 +124,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
         status: (intersection.status || "Green") as any,
         peakHour: PEAK_TIMES[idx] || "6:00 PM",
         peakVolume: Math.round(peakDensity),
-        avgPValue: intersection.p || 0,
+        savedCO2: (maxWait * avgDensity * 0.015) + ((intersection.p || 0) * 12.5),
         maxCongestionHrs: MAX_CONGESTION_MINS[idx] || 25,
         clearanceWindow: intersection.status === "Red" ? "1 AM – 4 AM" : "10 PM – 5 AM",
         hourlyData
@@ -230,6 +230,11 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
               </div>
               <div className="flex items-center gap-4 text-sm">
                 <div className="text-right">
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-bold">Total Time Saved</p>
+                  <p className="text-emerald-700 dark:text-emerald-300 font-bold font-mono">1.5 <span className="text-gray-500 dark:text-slate-500 font-normal">min/person</span></p>
+                </div>
+                <div className="w-px h-8 bg-gray-200 dark:bg-slate-800" />
+                <div className="text-right">
                   <p className="text-[10px] text-gray-500 dark:text-slate-500 uppercase tracking-wider">Peak</p>
                   <p className="text-sky-600 dark:text-red-400 font-bold font-mono">88,200 <span className="text-gray-500 dark:text-slate-500 font-normal">@ 6 PM</span></p>
                 </div>
@@ -251,7 +256,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#1e293b" : "#e2e8f0"} />
                   <XAxis dataKey="hour" tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 10 }} axisLine={{ stroke: isDark ? '#1e293b' : '#e2e8f0' }} tickLine={false} />
-                  <YAxis tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 10 }} axisLine={{ stroke: isDark ? '#1e293b' : '#e2e8f0' }} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v.toString()} />
+                  <YAxis tick={{ fill: isDark ? '#64748b' : '#94a3b8', fontSize: 10 }} axisLine={{ stroke: isDark ? '#1e293b' : '#e2e8f0' }} tickLine={false} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v.toString()} />
                   <Tooltip content={<CustomTooltip isDark={isDark} unit="vehicles" isVolume={true} />} />
                   <Area type="monotone" dataKey="vehicles" stroke={getPrimaryColor()} strokeWidth={2} fill="url(#areaGrad)" />
                 </AreaChart>
@@ -293,10 +298,10 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
                       <Tooltip content={<CustomTooltip isDark={isDark} />} />
                       <Bar dataKey="density" radius={[2, 2, 0, 0]}>
                         {item.hourlyData.map((entry, index) => {
-                           let barFill = getBarColor(item.status);
-                           if (entry.density > 80) barFill = isDark ? "#ef4444" : "#dc2626"; // Red for heavy traffic
-                           else if (entry.density > 55) barFill = isDark ? "#f59e0b" : "#d97706"; // Amber for moderate
-                           return <Cell key={`cell-${index}`} fill={barFill} />;
+                          let barFill = getBarColor(item.status);
+                          if (entry.density > 80) barFill = isDark ? "#ef4444" : "#dc2626"; // Red for heavy traffic
+                          else if (entry.density > 55) barFill = isDark ? "#f59e0b" : "#d97706"; // Amber for moderate
+                          return <Cell key={`cell-${index}`} fill={barFill} />;
                         })}
                       </Bar>
                     </BarChart>
@@ -322,9 +327,9 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
                   <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-3 border border-gray-100 dark:border-slate-700/30 transition-colors">
                     <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-1">
                       <Activity className="w-3 h-3" />
-                      Avg P-Value
+                      CO₂ Emission Saved
                     </div>
-                    <p className="text-lg font-bold font-mono" style={{ color: getBarColor(item.status) }}>{item.avgPValue.toFixed(2)}</p>
+                    <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">{item.savedCO2.toFixed(2)} <span className="text-xs text-gray-500 dark:text-slate-500 font-normal">kg/day</span></p>
                   </div>
                 </div>
               </div>
@@ -359,7 +364,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
               <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[item.status]}`} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-gray-700 dark:text-slate-300 font-medium truncate group-hover:text-gray-900 dark:group-hover:text-white transition-colors">{item.name}</p>
-                <p className="text-[10px] text-gray-500 dark:text-slate-600 font-mono">P: {item.avgPValue.toFixed(2)} · {item.peakHour}</p>
+                <p className="text-[10px] text-gray-500 dark:text-slate-600 font-mono">CO₂ Saved: {item.savedCO2.toFixed(2)} kg/day {item.peakHour}</p>
               </div>
               <span className={`w-1.5 h-5 rounded-full flex-shrink-0 ${STATUS_DOT[item.status]} opacity-20 dark:opacity-30`} />
             </button>
