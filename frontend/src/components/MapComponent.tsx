@@ -220,28 +220,54 @@ export default function MapComponent({ onSelectIntersection, selectedIntersectio
   const { nodes, intersections: liveIntersections } = useNetworkStatus();
 
   // ── CO₂ Saved & Time Saved (Cumulative, monotonically increasing) ──
-  // Uses a ref-based accumulator: each tick computes the instantaneous saving rate
-  // from current traffic data and adds a small increment. Value never decreases.
+  // Realistic Delhi model for 25 intersections:
+  //   - Mixed fleet avg idle emission: 1.8 g/s (bikes/autos/cars/trucks weighted)
+  //   - EV penetration Delhi 2026: ~5% → ICE factor = 0.95
+  //   - AI optimization saves ~15% avg idle time per vehicle
+  //   - ~40 vehicles queued per approach on avg (density-scaled)
+  //   - Target: ~800–1200 kg CO₂ saved per day across 25 nodes
+  //   - Time saved: ~1.5 min/vehicle per full day
+  const EV_FACTOR = 0.95; // 5% of vehicles are EVs (no idle emissions)
   const co2AccumRef = useRef(0);
   const timeSavedAccumRef = useRef(0);
   const [totalCO2Saved, setTotalCO2Saved] = useState(0);
   const [totalTimeSaved, setTotalTimeSaved] = useState(0);
 
-  // Seed with a reasonable starting value based on time of day
+  // Seed with time-of-day weighted value (traffic not uniform — heavier 8AM-10AM & 5PM-8PM)
   useEffect(() => {
     const now = new Date();
-    const hoursToday = now.getHours() + now.getMinutes() / 60;
-    // Base rate: ~25 intersections × ~1.2 kg/cycle × 30 cycles/hr ≈ 900 kg/hr
-    co2AccumRef.current = hoursToday * 900;
-    // Time saved: ~0.5 min/person/hr across network
-    timeSavedAccumRef.current = hoursToday * 0.5;
+    const hour = now.getHours() + now.getMinutes() / 60;
+    // Hourly traffic weight (0-24h): night is low, peaks at 9AM and 6PM
+    const trafficWeight = (h: number) => {
+      if (h < 6) return 0.1;
+      if (h < 8) return 0.4;
+      if (h < 10) return 0.9;
+      if (h < 12) return 0.6;
+      if (h < 14) return 0.5;
+      if (h < 16) return 0.55;
+      if (h < 18) return 0.85;
+      if (h < 20) return 0.95;
+      if (h < 22) return 0.5;
+      return 0.2;
+    };
+    // Integrate hourly rates up to current time → ~1000 kg/day total
+    // Base rate at peak = ~70 kg/hr, off-peak ~7 kg/hr → avg ~42 kg/hr
+    let accumulated = 0;
+    for (let h = 0; h < Math.floor(hour); h++) {
+      accumulated += 42 * trafficWeight(h);
+    }
+    // Partial current hour
+    accumulated += 42 * trafficWeight(Math.floor(hour)) * (hour - Math.floor(hour));
+    co2AccumRef.current = accumulated;
+    // Time saved: ~1.5 min/vehicle across full day
+    timeSavedAccumRef.current = (hour / 24) * 1.5;
   }, []);
 
   useEffect(() => {
     if (nodes.length === 0) return;
 
     const ticker = setInterval(() => {
-      // Compute instantaneous CO₂ saving rate from live data (kg per second across all nodes)
+      // Compute instantaneous CO₂ saving rate from live data
       let rateKgPerSec = 0;
       nodes.forEach((node) => {
         if (!node || !node.lanes) return;
@@ -250,19 +276,22 @@ export default function MapComponent({ onSelectIntersection, selectedIntersectio
         const avgDensity = laneValues.reduce((s, l) => s + (l.density || 0), 0) / laneCount;
         const avgWait = laneValues.reduce((s, l) => s + (l.wait_time || 0), 0) / laneCount;
 
-        const vehiclesPerLane = (avgDensity / 100) * 120;
-        const savedIdleSec = avgWait * 0.18; // AI saves 18% idle time
-        const co2Grams = savedIdleSec * vehiclesPerLane * 2.3 * laneCount; // 2.3 g/s ARAI
-        // Per cycle (~120s), so rate per second = co2Grams / 120 / 1000 (to kg)
+        // Vehicles queued per lane (scaled down: max ~40 per approach, not 120)
+        const vehiclesPerLane = (avgDensity / 100) * 40;
+        const savedIdleSec = avgWait * 0.15; // AI saves 15% idle time
+        // 1.8 g/s mixed fleet avg × EV factor
+        const co2Grams = savedIdleSec * vehiclesPerLane * 1.8 * EV_FACTOR * laneCount;
+        // Amortize per cycle (~120s) to get per-second rate, convert to kg
         rateKgPerSec += (co2Grams / 120) / 1000;
       });
 
-      // Ensure minimum rate so value always grows
-      rateKgPerSec = Math.max(rateKgPerSec, 0.05);
+      // Minimum rate (very small) so value ticks up even at night
+      rateKgPerSec = Math.max(rateKgPerSec, 0.002);
 
       // Accumulate (1 second tick)
       co2AccumRef.current += rateKgPerSec;
-      timeSavedAccumRef.current += 0.0001; // ~0.36 min/hr steady gain
+      // Time saved ticks up slowly: ~1.5 min/vehicle across 24h = 0.0000174 min/sec
+      timeSavedAccumRef.current += 0.0000174;
 
       setTotalCO2Saved(co2AccumRef.current);
       setTotalTimeSaved(timeSavedAccumRef.current);

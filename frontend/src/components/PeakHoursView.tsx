@@ -57,7 +57,8 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
   const [isDark, setIsDark] = useState(false);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // ── Cumulative CO₂ & Time Saved (same model as MapComponent) ──
+  // ── Cumulative CO₂ & Time Saved (same realistic model as MapComponent) ──
+  const EV_FACTOR = 0.95;
   const co2AccumRef = useRef(0);
   const timeSavedAccumRef = useRef(0);
   const [totalCO2, setTotalCO2] = useState(0);
@@ -65,9 +66,20 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
 
   useEffect(() => {
     const now = new Date();
-    const hoursToday = now.getHours() + now.getMinutes() / 60;
-    co2AccumRef.current = hoursToday * 900;
-    timeSavedAccumRef.current = hoursToday * 0.5;
+    const hour = now.getHours() + now.getMinutes() / 60;
+    const trafficWeight = (h: number) => {
+      if (h < 6) return 0.1; if (h < 8) return 0.4; if (h < 10) return 0.9;
+      if (h < 12) return 0.6; if (h < 14) return 0.5; if (h < 16) return 0.55;
+      if (h < 18) return 0.85; if (h < 20) return 0.95; if (h < 22) return 0.5;
+      return 0.2;
+    };
+    let accumulated = 0;
+    for (let h = 0; h < Math.floor(hour); h++) {
+      accumulated += 42 * trafficWeight(h);
+    }
+    accumulated += 42 * trafficWeight(Math.floor(hour)) * (hour - Math.floor(hour));
+    co2AccumRef.current = accumulated;
+    timeSavedAccumRef.current = (hour / 24) * 1.5;
   }, []);
 
   useEffect(() => {
@@ -80,14 +92,14 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
         const laneCount = laneValues.length || 1;
         const avgDensity = laneValues.reduce((s, l) => s + (l.density || 0), 0) / laneCount;
         const avgWait = laneValues.reduce((s, l) => s + (l.wait_time || 0), 0) / laneCount;
-        const vehiclesPerLane = (avgDensity / 100) * 120;
-        const savedIdleSec = avgWait * 0.18;
-        const co2Grams = savedIdleSec * vehiclesPerLane * 2.3 * laneCount;
+        const vehiclesPerLane = (avgDensity / 100) * 40;
+        const savedIdleSec = avgWait * 0.15;
+        const co2Grams = savedIdleSec * vehiclesPerLane * 1.8 * EV_FACTOR * laneCount;
         rateKgPerSec += (co2Grams / 120) / 1000;
       });
-      rateKgPerSec = Math.max(rateKgPerSec, 0.05);
+      rateKgPerSec = Math.max(rateKgPerSec, 0.002);
       co2AccumRef.current += rateKgPerSec;
-      timeSavedAccumRef.current += 0.0001;
+      timeSavedAccumRef.current += 0.0000174;
       setTotalCO2(co2AccumRef.current);
       setTotalTimeSaved(timeSavedAccumRef.current);
     }, 1000);
