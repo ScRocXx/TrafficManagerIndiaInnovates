@@ -29,6 +29,7 @@ interface IntersectionPeakData {
   peakHour: string;
   peakVolume: number;
   savedCO2: number;
+  timeSaved: number;
   maxCongestionHrs: number;
   clearanceWindow: string;
   hourlyData: { hour: string; density: number }[];
@@ -56,6 +57,43 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
   const [isDark, setIsDark] = useState(false);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // ── Cumulative CO₂ & Time Saved (same model as MapComponent) ──
+  const co2AccumRef = useRef(0);
+  const timeSavedAccumRef = useRef(0);
+  const [totalCO2, setTotalCO2] = useState(0);
+  const [totalTimeSaved, setTotalTimeSaved] = useState(0);
+
+  useEffect(() => {
+    const now = new Date();
+    const hoursToday = now.getHours() + now.getMinutes() / 60;
+    co2AccumRef.current = hoursToday * 900;
+    timeSavedAccumRef.current = hoursToday * 0.5;
+  }, []);
+
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    const ticker = setInterval(() => {
+      let rateKgPerSec = 0;
+      nodes.forEach((node) => {
+        if (!node || !node.lanes) return;
+        const laneValues = Object.values(node.lanes) as { density: number; wait_time: number }[];
+        const laneCount = laneValues.length || 1;
+        const avgDensity = laneValues.reduce((s, l) => s + (l.density || 0), 0) / laneCount;
+        const avgWait = laneValues.reduce((s, l) => s + (l.wait_time || 0), 0) / laneCount;
+        const vehiclesPerLane = (avgDensity / 100) * 120;
+        const savedIdleSec = avgWait * 0.18;
+        const co2Grams = savedIdleSec * vehiclesPerLane * 2.3 * laneCount;
+        rateKgPerSec += (co2Grams / 120) / 1000;
+      });
+      rateKgPerSec = Math.max(rateKgPerSec, 0.05);
+      co2AccumRef.current += rateKgPerSec;
+      timeSavedAccumRef.current += 0.0001;
+      setTotalCO2(co2AccumRef.current);
+      setTotalTimeSaved(timeSavedAccumRef.current);
+    }, 1000);
+    return () => clearInterval(ticker);
+  }, [nodes]);
+
   const intersectionData = React.useMemo(() => {
     return intersections.map((intersection, idx) => {
       const node = nodes[idx] || null;
@@ -70,6 +108,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
           peakHour: "9:00 AM",
           peakVolume: 92,
           savedCO2: (() => { const v = (92/100)*120; const s = 45*0.18; return (s*v*2.3*4)/1000; })(),
+          timeSaved: 1.35,
           maxCongestionHrs: 38,
           clearanceWindow: "1 AM - 4 AM",
           hourlyData: [
@@ -125,6 +164,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
         peakHour: PEAK_TIMES[idx] || "6:00 PM",
         peakVolume: Math.round(peakDensity),
         savedCO2: (() => { const v = (avgDensity/100)*120; const s = maxWait*0.18; return (s*v*2.3*Math.max(Object.keys(node?.lanes||{}).length,1))/1000; })(),
+        timeSaved: maxWait > 0 ? Number((maxWait * 0.18 / 60).toFixed(2)) : 0.5,
         maxCongestionHrs: MAX_CONGESTION_MINS[idx] || 25,
         clearanceWindow: intersection.status === "Red" ? "1 AM – 4 AM" : "10 PM – 5 AM",
         hourlyData
@@ -230,8 +270,13 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
               </div>
               <div className="flex items-center gap-4 text-sm">
                 <div className="text-right">
-                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-bold">Total Time Saved</p>
-                  <p className="text-emerald-700 dark:text-emerald-300 font-bold font-mono">1.5 <span className="text-gray-500 dark:text-slate-500 font-normal">min/person</span></p>
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-bold">CO₂ Saved Today</p>
+                  <p className="text-emerald-700 dark:text-emerald-300 font-bold font-mono">{totalCO2.toFixed(1)} <span className="text-gray-500 dark:text-slate-500 font-normal">kg</span></p>
+                </div>
+                <div className="w-px h-8 bg-gray-200 dark:bg-slate-800" />
+                <div className="text-right">
+                  <p className="text-[10px] text-sky-600 dark:text-cyan-400 uppercase tracking-wider font-bold">Time Saved</p>
+                  <p className="text-sky-700 dark:text-cyan-300 font-bold font-mono">{totalTimeSaved.toFixed(1)} <span className="text-gray-500 dark:text-slate-500 font-normal">min/vehicle</span></p>
                 </div>
                 <div className="w-px h-8 bg-gray-200 dark:bg-slate-800" />
                 <div className="text-right">
@@ -331,6 +376,13 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
                     </div>
                     <p className="text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">{item.savedCO2.toFixed(2)} <span className="text-xs text-gray-500 dark:text-slate-500 font-normal">kg/day</span></p>
                   </div>
+                  <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-3 border border-gray-100 dark:border-slate-700/30 transition-colors">
+                    <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-1">
+                      <Clock className="w-3 h-3" />
+                      Time Saved / Vehicle
+                    </div>
+                    <p className="text-lg font-bold font-mono text-sky-600 dark:text-cyan-400">{item.timeSaved.toFixed(2)} <span className="text-xs text-gray-500 dark:text-slate-500 font-normal">min</span></p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -364,7 +416,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
               <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT[item.status]}`} />
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-gray-700 dark:text-slate-300 font-medium truncate group-hover:text-gray-900 dark:group-hover:text-white transition-colors">{item.name}</p>
-                <p className="text-[10px] text-gray-500 dark:text-slate-600 font-mono">CO₂ Saved: {item.savedCO2.toFixed(2)} kg/day {item.peakHour}</p>
+                <p className="text-[10px] text-gray-500 dark:text-slate-600 font-mono">CO₂: {item.savedCO2.toFixed(2)} kg · Time: {item.timeSaved.toFixed(1)} min/veh</p>
               </div>
               <span className={`w-1.5 h-5 rounded-full flex-shrink-0 ${STATUS_DOT[item.status]} opacity-20 dark:opacity-30`} />
             </button>

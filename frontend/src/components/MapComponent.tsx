@@ -359,7 +359,7 @@ export default function MapComponent({ onSelectIntersection, selectedIntersectio
             Avg. Commute Time Saved
           </div>
           <p className="text-lg font-bold font-mono text-sky-600 dark:text-cyan-400">
-            {totalTimeSaved.toFixed(1)} <span className="text-xs text-gray-500 dark:text-slate-500 font-normal">min/person</span>
+            {totalTimeSaved.toFixed(1)} <span className="text-xs text-gray-500 dark:text-slate-500 font-normal">min/vehicle</span>
           </p>
         </div>
       </div>
