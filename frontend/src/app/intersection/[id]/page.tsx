@@ -331,9 +331,7 @@ function CodeRedPanel({ codeRed, codeRedTimer, onActivate, onDeactivate, showToa
   const [isHolding, setIsHolding] = useState(false);
   const [errors, setErrors] = useState<{ officer?: string; supervisor?: string; cooldown?: string }>({});
   const [lastActivatedAt, setLastActivatedAt] = useState<number | null>(null);
-  const [countdown, setCountdown] = useState<number | null>(null);
   const holdRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startHold = () => {
     // Validate PINs first
@@ -381,22 +379,9 @@ function CodeRedPanel({ codeRed, codeRedTimer, onActivate, onDeactivate, showToa
     onActivate();
     setOfficerPin("");
     setSupervisorPin("");
-    // 10s cancellation countdown
-    let secs = 10;
-    setCountdown(secs);
-    countdownRef.current = setInterval(() => {
-      secs--;
-      setCountdown(secs);
-      if (secs <= 0) {
-        clearInterval(countdownRef.current!);
-        setCountdown(null);
-      }
-    }, 1000);
   };
 
   const handleDeactivate = () => {
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    setCountdown(null);
     onDeactivate();
   };
 
@@ -415,7 +400,7 @@ function CodeRedPanel({ codeRed, codeRedTimer, onActivate, onDeactivate, showToa
           }`}>{codeRed ? "ACTIVE" : "OFF"}</span>
         {codeRed && (
           <span className="ml-1 text-[10px] font-mono px-2 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 font-bold">
-            {codeRedTimer}s active
+            {Math.floor(codeRedTimer)}s active
           </span>
         )}
       </div>
@@ -430,12 +415,6 @@ function CodeRedPanel({ codeRed, codeRedTimer, onActivate, onDeactivate, showToa
       {/* ACTIVE state */}
       {codeRed && (
         <div className="mb-3">
-          {countdown !== null && (
-            <div className="flex items-center gap-2 mb-3 p-2 rounded-lg bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-500/30">
-              <span className="text-[11px] text-red-600 dark:text-red-400 font-mono">Cancel window:</span>
-              <span className="text-lg font-bold text-red-600 dark:text-red-400 font-mono">{countdown}s</span>
-            </div>
-          )}
           <button
             onClick={handleDeactivate}
             className="w-full py-2 text-[11px] font-bold uppercase tracking-wider rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
@@ -731,7 +710,7 @@ export default function IntersectionPage() {
         return next;
       });
       if (codeRed) {
-        setCodeRedTimer(p => p + 1);
+        setCodeRedTimer(p => p + 0.1);
       }
       
       setLaneGreenTimers(prev => {
