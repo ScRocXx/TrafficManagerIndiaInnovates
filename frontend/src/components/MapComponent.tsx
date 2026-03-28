@@ -220,24 +220,34 @@ export default function MapComponent({ onSelectIntersection, selectedIntersectio
   const { nodes, intersections: liveIntersections } = useNetworkStatus();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // ── CO₂ Saved (Transport Engineering Model) ──
+  // CO₂_saved = idle_time_reduced × vehicles × emission_rate, accumulated over cycles today
+  // Constants: 2.3 g/s idle emission (ARAI India), AI saves ~18% idle wait, ~120 max vehicles/lane
   const totalCO2Saved = React.useMemo(() => {
-    return liveIntersections.reduce((sum, intersection, idx) => {
+    const now = new Date();
+    const hoursToday = now.getHours() + now.getMinutes() / 60;
+    const cyclesPerHour = 30; // ~2min cycle per intersection
+
+    const perCycleSaved = liveIntersections.reduce((sum, intersection, idx) => {
       const node = nodes[idx];
-      const avgDensity = (intersection.p || 0) * 100;
-      const p_level = intersection.p || 0;
-      let maxWait = 0;
+      let avgDensity = 0;
+      let avgWait = 0;
+      let laneCount = 0;
+
       if (node && node.lanes) {
-        maxWait = Math.max(...Object.values(node.lanes).map((l: any) => l.wait_time || 0));
+        const laneValues = Object.values(node.lanes) as { density: number; wait_time: number }[];
+        laneCount = laneValues.length;
+        avgDensity = laneValues.reduce((s, l) => s + (l.density || 0), 0) / (laneCount || 1);
+        avgWait = laneValues.reduce((s, l) => s + (l.wait_time || 0), 0) / (laneCount || 1);
       }
 
-      let savedCO2 = (maxWait * avgDensity * 0.015) + (p_level * 12.5);
-
-      if (intersection.nodeId === "284501" || idx === 0) {
-        savedCO2 = (45 * 92 * 0.015) + (0.85 * 12.5);
-      }
-
-      return sum + (savedCO2 > 0 ? savedCO2 : 0);
+      const vehiclesPerLane = (avgDensity / 100) * 120;
+      const savedIdleSeconds = avgWait * 0.18;
+      const co2SavedGrams = savedIdleSeconds * vehiclesPerLane * 2.3 * Math.max(laneCount, 1);
+      return sum + Math.max(0, co2SavedGrams / 1000);
     }, 0);
+
+    return perCycleSaved * cyclesPerHour * hoursToday;
   }, [nodes, liveIntersections]);
 
   useEffect(() => {

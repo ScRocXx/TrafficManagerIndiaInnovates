@@ -69,7 +69,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
           status: intersection.status as any,
           peakHour: "9:00 AM",
           peakVolume: 92,
-          savedCO2: (45 * 92 * 0.015) + (0.85 * 12.5),
+          savedCO2: (() => { const v = (92/100)*120; const s = 45*0.18; return (s*v*2.3*4)/1000; })(),
           maxCongestionHrs: 38,
           clearanceWindow: "1 AM - 4 AM",
           hourlyData: [
@@ -124,7 +124,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
         status: (intersection.status || "Green") as any,
         peakHour: PEAK_TIMES[idx] || "6:00 PM",
         peakVolume: Math.round(peakDensity),
-        savedCO2: (maxWait * avgDensity * 0.015) + ((intersection.p || 0) * 12.5),
+        savedCO2: (() => { const v = (avgDensity/100)*120; const s = maxWait*0.18; return (s*v*2.3*Math.max(Object.keys(node?.lanes||{}).length,1))/1000; })(),
         maxCongestionHrs: MAX_CONGESTION_MINS[idx] || 25,
         clearanceWindow: intersection.status === "Red" ? "1 AM – 4 AM" : "10 PM – 5 AM",
         hourlyData
