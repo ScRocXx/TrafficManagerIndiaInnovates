@@ -355,7 +355,9 @@ def override_signal(data: OverrideRequest):
             # Deactivate any overrides and resume normal physics
             if ghost_id in GHOST_OVERRIDES:
                 del GHOST_OVERRIDES[ghost_id]
-            print(f"[GHOST OVERRIDE] {ghost_id} RESET to normal physics")
+            # Immediately kickstart a green lane so simulation resumes smoothly
+            _switch_light(node)
+            print(f"[GHOST OVERRIDE] {ghost_id} RESET to normal physics, green on {node['active_green_lane']}")
             return {"success": True, "message": "Override cleared."}
 
         elif target_state == "CODE_RED":
