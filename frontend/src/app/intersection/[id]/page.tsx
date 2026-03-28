@@ -995,7 +995,7 @@ export default function IntersectionPage() {
                   const current = codeRed ? "RED" : laneStates[dir];
                   const isFallback = systemMode === "LEGACY_MICROCONTROLLER";
                   
-                  const waitVal = isFallback ? "60s (Fixed)" : (current === "RED" ? `${Math.floor(laneWaitTimers[dir] || 0)}s` : "0s");
+                  const waitVal = isFallback ? "90s (Fixed)" : (current === "RED" ? `${Math.floor(laneWaitTimers[dir] || 0)}s` : "0s");
                   const greenVal = isFallback ? "30s (Static)" : (current === "GRN" || current === "YEL" ? `${laneGreenTimers[dir] ?? 0}s` : "—");
                   const density = isFallback ? "N/A (Sensor Fault)" : (laneDensities[dir] || "0.00%");
                   
