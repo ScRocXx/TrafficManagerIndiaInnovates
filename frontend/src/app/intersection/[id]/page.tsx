@@ -1004,7 +1004,7 @@ export default function IntersectionPage() {
                   // Use specific video if it's the 5-camera demo node
                   const vidId = isDemoNode ? (DEMO_LANE_VIDEOS.LANES as any)[dir] || "1EiC9bvVGnk" : (intersection.videoId || "1EiC9bvVGnk");
                   return (
-                    <CameraFeed key={lane.direction} lane={lane} currentSignal={laneStates[dir]} videoId={vidId} streamActive={streamActive} isFallback={isFallback} />
+                    <CameraFeed key={lane.direction} lane={lane} currentSignal={current as "RED" | "YEL" | "GRN"} videoId={vidId} streamActive={streamActive} isFallback={isFallback} />
                   );
                 })}
               </div>
@@ -1085,7 +1085,7 @@ export default function IntersectionPage() {
                 {/* Lane Rows */}
                 <div className="p-4 space-y-2">
                   {["01", "02", "03", "04"].map((dir) => {
-                    const current = laneStates[dir];
+                    const current = codeRed ? "RED" : laneStates[dir];
                     const isUnlocked = unlockedLanes[dir];
                     const isPinOpen = pinOpenLane === dir;
                     const isActive = laneActive[dir];
