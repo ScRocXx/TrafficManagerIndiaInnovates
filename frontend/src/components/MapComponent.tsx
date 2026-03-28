@@ -288,14 +288,14 @@ export default function MapComponent({ onSelectIntersection, selectedIntersectio
       // Minimum rate (very small) so value ticks up even at night
       rateKgPerSec = Math.max(rateKgPerSec, 0.002);
 
-      // Accumulate (1 second tick)
-      co2AccumRef.current += rateKgPerSec;
-      // Time saved ticks up slowly: ~1.5 min/vehicle across 24h = 0.0000174 min/sec
-      timeSavedAccumRef.current += 0.0000174;
+      // Accumulate (3 second tick)
+      co2AccumRef.current += rateKgPerSec * 3;
+      // Time saved ticks up slowly: ~1.5 min/vehicle across 24h
+      timeSavedAccumRef.current += 0.0000174 * 3;
 
       setTotalCO2Saved(co2AccumRef.current);
       setTotalTimeSaved(timeSavedAccumRef.current);
-    }, 1000);
+    }, 3000);
 
     return () => clearInterval(ticker);
   }, [nodes]);

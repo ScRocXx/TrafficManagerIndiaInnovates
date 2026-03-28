@@ -98,11 +98,11 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
         rateKgPerSec += (co2Grams / 120) / 1000;
       });
       rateKgPerSec = Math.max(rateKgPerSec, 0.002);
-      co2AccumRef.current += rateKgPerSec;
-      timeSavedAccumRef.current += 0.0000174;
+      co2AccumRef.current += rateKgPerSec * 3;
+      timeSavedAccumRef.current += 0.0000174 * 3;
       setTotalCO2(co2AccumRef.current);
       setTotalTimeSaved(timeSavedAccumRef.current);
-    }, 1000);
+    }, 3000);
     return () => clearInterval(ticker);
   }, [nodes]);
 
