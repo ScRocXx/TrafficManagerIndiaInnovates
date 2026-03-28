@@ -112,7 +112,8 @@ def _switch_light(node: dict):
 
     # Turn old green lane red
     old_green = node["active_green_lane"]
-    node["lanes"][old_green]["is_green"] = False
+    if old_green and old_green in node["lanes"]:
+        node["lanes"][old_green]["is_green"] = False
 
     # Calculate new green time using the exponential formula
     new_lane = node["lanes"][best_lane]
