@@ -233,34 +233,38 @@ export default function MapComponent({ onSelectIntersection, selectedIntersectio
   const [totalCO2Saved, setTotalCO2Saved] = useState(0);
   const [totalTimeSaved, setTotalTimeSaved] = useState(0);
 
-  // Seed with time-of-day weighted value (traffic not uniform — heavier 8AM-10AM & 5PM-8PM)
+  // Seed with persistent data from Backend
   useEffect(() => {
-    const now = new Date();
-    const hour = now.getHours() + now.getMinutes() / 60;
-    // Hourly traffic weight (0-24h): night is low, peaks at 9AM and 6PM
-    const trafficWeight = (h: number) => {
-      if (h < 6) return 0.1;
-      if (h < 8) return 0.4;
-      if (h < 10) return 0.9;
-      if (h < 12) return 0.6;
-      if (h < 14) return 0.5;
-      if (h < 16) return 0.55;
-      if (h < 18) return 0.85;
-      if (h < 20) return 0.95;
-      if (h < 22) return 0.5;
-      return 0.2;
+    const fetchGlobalStats = async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/stats`);
+        const data = await res.json();
+        if (data.totalCO2Saved) {
+          co2AccumRef.current = data.totalCO2Saved;
+          timeSavedAccumRef.current = data.totalTimeSaved;
+          setTotalCO2Saved(data.totalCO2Saved);
+          setTotalTimeSaved(data.totalTimeSaved);
+          console.log("[STATS] Persistent metrics loaded:", data);
+        }
+      } catch (err) {
+        console.error("[STATS] Failed to fetch persistent stats, falling back to local estimation:", err);
+        // Fallback to local time-of-day estimation if backend is unreachable
+        const now = new Date();
+        const hour = now.getHours() + now.getMinutes() / 60;
+        const trafficWeight = (h: number) => {
+          if (h < 6) return 0.1; if (h < 8) return 0.4; if (h < 10) return 0.9;
+          if (h < 12) return 0.6; if (h < 14) return 0.5; if (h < 16) return 0.55;
+          if (h < 18) return 0.85; if (h < 20) return 0.95; if (h < 22) return 0.5;
+          return 0.2;
+        };
+        let accumulated = 0;
+        for (let h = 0; h < Math.floor(hour); h++) accumulated += 42 * trafficWeight(h);
+        accumulated += 42 * trafficWeight(Math.floor(hour)) * (hour - Math.floor(hour));
+        co2AccumRef.current = accumulated;
+        timeSavedAccumRef.current = (hour / 24) * 1.5;
+      }
     };
-    // Integrate hourly rates up to current time → ~1000 kg/day total
-    // Base rate at peak = ~70 kg/hr, off-peak ~7 kg/hr → avg ~42 kg/hr
-    let accumulated = 0;
-    for (let h = 0; h < Math.floor(hour); h++) {
-      accumulated += 42 * trafficWeight(h);
-    }
-    // Partial current hour
-    accumulated += 42 * trafficWeight(Math.floor(hour)) * (hour - Math.floor(hour));
-    co2AccumRef.current = accumulated;
-    // Time saved: ~1.5 min/vehicle across full day
-    timeSavedAccumRef.current = (hour / 24) * 1.5;
+    fetchGlobalStats();
   }, []);
 
   useEffect(() => {

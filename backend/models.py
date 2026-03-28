@@ -22,3 +22,11 @@ class TrafficMetricsRecord(database.Base):
     state_snapshot = Column(JSON)
     lane_metrics = Column(JSON)
     critical_events_this_minute = Column(JSON)
+class GlobalStatsRecord(database.Base):
+    __tablename__ = "global_stats"
+
+    id = Column(Integer, primary_key=True, index=True)
+    total_co2_saved = Column(Float, default=0.0)
+    total_time_saved = Column(Float, default=0.0)
+    last_updated = Column(DateTime, default=datetime.datetime.utcnow)
+    last_reset = Column(DateTime, default=datetime.datetime.utcnow)

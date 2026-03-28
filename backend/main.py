@@ -34,6 +34,9 @@ app.add_middleware(
 STREAM_ACTIVE = False
 LAST_SEEN_NODES = {} # Tracks {node_id: datetime}
 AMBULANCE_ALERTS = {} # Tracks {node_id: alert_payload}
+GLOBAL_CO2 = 0.0
+GLOBAL_TIME_SAVED = 0.0
+STATS_LOCK = threading.Lock()
 
 # ─── GHOST NODE SIMULATION (23 simulated intersections) ─────────────────────
 GHOST_NODE_NAMES = [
@@ -144,21 +147,47 @@ async def ghost_physics_loop():
             if node_id in GHOST_OVERRIDES:
                 continue
 
+            # --- Persistent Stats Accumulation (Instantaneous Rate per Check) ---
+            # Model: saving ~15% idle time vs legacy
+            node_co2_sec = 0
             for lid in LANE_IDS:
                 lane = node["lanes"][lid]
                 if lane["is_green"]:
-                    # Green lane: density drains, wait stays 0
                     lane["density"] = max(0, lane["density"] - random.randint(2, 5))
                     lane["wait_time"] = 0
                 else:
-                    # Red lane: density slowly builds, wait ticks up
                     lane["density"] = min(100, lane["density"] + random.randint(0, 3))
                     if lane["density"] > 0:
                         lane["wait_time"] += 1
+                        # Estimate CO2 saved vs if this was a fixed timer:
+                        # (current_density * scale) * (wait_time * 0.15) * 1.8g/s
+                        v_lane = (lane["density"] / 100) * 40
+                        s_idle = lane["wait_time"] * 0.15
+                        # Grams per cycle (~120s amortized)
+                        node_co2_sec += (s_idle * v_lane * 1.8 * 0.95) / 120
+
+            with STATS_LOCK:
+                global GLOBAL_CO2, GLOBAL_TIME_SAVED
+                GLOBAL_CO2 += max(0.002, node_co2_sec / 1000) # kg per sec
+                GLOBAL_TIME_SAVED += 0.0000174 / 23 # Amortized time per vehicle across 23 nodes
 
             node["remaining_green_time"] -= 1
             if node["remaining_green_time"] <= 0:
                 _switch_light(node)
+
+        # Periodic DB Commit (Approx every 30 seconds)
+        if datetime.datetime.utcnow().second % 30 == 0:
+            try:
+                db = database.SessionLocal()
+                record = db.query(models.GlobalStatsRecord).first()
+                if record:
+                    record.total_co2_saved = GLOBAL_CO2
+                    record.total_time_saved = GLOBAL_TIME_SAVED
+                    record.last_updated = datetime.datetime.utcnow()
+                    db.commit()
+                db.close()
+            except Exception as e:
+                print(f"[DB] Stats Persistence Failed: {e}")
 
         await asyncio.sleep(1)
 
@@ -222,6 +251,48 @@ def on_mqtt_message(client, userdata, msg):
     except Exception as e:
         print(f"[MQTT] ERROR processing message: {e}")
 
+def init_global_stats():
+    """Seed or load global statistics from the database."""
+    global GLOBAL_CO2, GLOBAL_TIME_SAVED
+    db = database.SessionLocal()
+    try:
+        record = db.query(models.GlobalStatsRecord).first()
+        if not record:
+            # Seed based on time of day (Matching Frontend Logic)
+            now = datetime.datetime.utcnow()
+            hour = now.hour + now.minute / 60
+            def traffic_weight(h):
+                if h < 6: return 0.1
+                if h < 8: return 0.4
+                if h < 10: return 0.9
+                if h < 12: return 0.6
+                if h < 14: return 0.5
+                if h < 16: return 0.55
+                if h < 18: return 0.85
+                if h < 20: return 0.95
+                if h < 22: return 0.5
+                return 0.2
+            accumulated = 0
+            for h in range(int(hour)):
+                accumulated += 42 * traffic_weight(h)
+            accumulated += 42 * traffic_weight(int(hour)) * (hour - int(hour))
+            
+            record = models.GlobalStatsRecord(
+                total_co2_saved=accumulated,
+                total_time_saved=(hour / 24) * 1.5,
+                last_reset=datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            )
+            db.add(record)
+            db.commit()
+            print(f"[DB] Seeded new GlobalStatsRecord: {accumulated:.1f} kg CO2")
+        
+        GLOBAL_CO2 = record.total_co2_saved
+        GLOBAL_TIME_SAVED = record.total_time_saved
+    except Exception as e:
+        print(f"[DB] Global Stats Init Error: {e}")
+    finally:
+        db.close()
+
 def start_mqtt_client():
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, "india-innovate-backend-" + str(uuid.uuid4()))
     client.on_connect = on_mqtt_connect
@@ -240,6 +311,7 @@ async def startup_event():
     mqtt_thread.start()
     # Seed and start ghost node physics simulation
     init_ghost_nodes()
+    init_global_stats()
     asyncio.create_task(ghost_physics_loop())
 
 # --- Pydantic Data Models (Input Validation) ---
@@ -600,6 +672,15 @@ def get_node_traffic(node_id: str, db: Session = Depends(database.get_db)):
 def get_stream_status():
     """Endpoint for frontend to poll if actual camera simulation data has started arriving"""
     return {"active": STREAM_ACTIVE}
+
+@app.get("/api/stats")
+def get_global_stats():
+    """Returns persistent global CO2 and Time Saved metrics"""
+    return {
+        "totalCO2Saved": round(GLOBAL_CO2, 1),
+        "totalTimeSaved": round(GLOBAL_TIME_SAVED, 1),
+        "lastUpdated": datetime.datetime.utcnow().isoformat()
+    }
 
 @app.get("/api/ambulance-alerts/{node_id}")
 def get_ambulance_alert(node_id: str):
