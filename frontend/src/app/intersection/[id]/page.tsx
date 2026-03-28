@@ -400,7 +400,7 @@ function CodeRedPanel({ codeRed, codeRedTimer, onActivate, onDeactivate, showToa
           }`}>{codeRed ? "ACTIVE" : "OFF"}</span>
         {codeRed && (
           <span className="ml-1 text-[10px] font-mono px-2 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 font-bold">
-            {Math.floor(codeRedTimer)}s active
+            {codeRedTimer}s active
           </span>
         )}
       </div>
@@ -551,6 +551,7 @@ export default function IntersectionPage() {
   // Code Red
   const [codeRed, setCodeRed] = useState(false);
   const [codeRedTimer, setCodeRedTimer] = useState<number>(0);
+  const codeRedStartRef = useRef<number>(0);
 
   // Live status from API
   const [liveStatus, setLiveStatus] = useState<string>("Green");
@@ -710,7 +711,7 @@ export default function IntersectionPage() {
         return next;
       });
       if (codeRed) {
-        setCodeRedTimer(p => p + 0.1);
+        setCodeRedTimer(Math.floor((Date.now() - codeRedStartRef.current) / 1000));
       }
       
       setLaneGreenTimers(prev => {
@@ -1206,6 +1207,7 @@ export default function IntersectionPage() {
                     codeRedTimer={codeRedTimer}
                     onActivate={() => {
                       setCodeRed(true);
+                      codeRedStartRef.current = Date.now();
                       setCodeRedTimer(0);
                       
                       const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
@@ -1221,6 +1223,7 @@ export default function IntersectionPage() {
                     onDeactivate={() => {
                       setCodeRed(false);
                       setCodeRedTimer(0);
+                      codeRedStartRef.current = 0;
 
                       const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
                       fetch(`${API_URL}/api/override`, {
