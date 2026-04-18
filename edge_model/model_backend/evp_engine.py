@@ -4,7 +4,7 @@ Safely subclasses the main V6 TrafficEngine to add real-time
 interrupt logic based on ambulance Time-To-Arrival (TTA).
 """
 import sys
-from engine import TrafficEngine, STATE_BASE_GREEN, STATE_EXTENSION, STATE_IDLE, STATE_YELLOW
+from .engine import TrafficEngine, STATE_BASE_GREEN, STATE_EXTENSION, STATE_IDLE, STATE_YELLOW
 
 class EVPTrafficEngine(TrafficEngine):
     """
