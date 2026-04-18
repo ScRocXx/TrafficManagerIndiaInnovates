@@ -1,0 +1,13 @@
+
+
+*.zip
+*.onnx
+
+tmp/
+__pycache__/
+.pytest_cache/
+*.part
+*.ytdl
+
+frontend/
+TempFrontend/
