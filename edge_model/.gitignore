@@ -1,0 +1,13 @@
+
+*.mp4
+*.zip
+*.onnx
+testimages/
+tmp/
+__pycache__/
+.pytest_cache/
+*.part
+*.ytdl
+dataset/
+frontend/
+TempFrontend/
