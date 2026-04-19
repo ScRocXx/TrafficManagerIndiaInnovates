@@ -92,7 +92,7 @@ class TrafficEngine:
             self.reporter.start()
         except ImportError:
             try:
-                from backend.cloud_reporter import CloudReporter
+                from model_backend.cloud_reporter import CloudReporter
                 self.reporter = CloudReporter(self)
                 self.reporter.start()
             except ImportError:
