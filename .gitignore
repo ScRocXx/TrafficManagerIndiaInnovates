@@ -40,7 +40,6 @@ yarn-error.log*
 
 # databases & text
 *.db
-*.txt
 
 # misc & OS
 .DS_Store

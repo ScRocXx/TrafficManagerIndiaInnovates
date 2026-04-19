@@ -1,0 +1,49 @@
+﻿[OK] ultralytics version: 8.4.23
+
+============================================================
+NORTHERN BLADES ΓÇö MODEL DIAGNOSTIC
+============================================================
+
+[1] File Check:
+    Model: c:\traffic_optimizers\best.pt ΓÇö EXISTS
+    Image: c:\traffic_optimizers\dataset\image.png ΓÇö EXISTS
+    Model size: 5.7 MB
+
+[2] Loading model...
+    Model task: segment
+    Classes: {0: 'Light_Motor', 1: 'Heavy_Motor', 2: 'Three_Wheeler', 3: 'Two_Wheeler', 4: 'organic_object', 5: 'Unknown_Mass'}
+    Number of classes: 6
+    OK: Model IS a segmentation model.
+
+[3] Running inference...
+
+image 1/1 c:\traffic_optimizers\dataset\image.png: 384x640 4 Light_Motors, 3 Heavy_Motors, 2 Three_Wheelers, 10 Unknown_Masss, 92.6ms
+Speed: 3.8ms preprocess, 92.6ms inference, 11.5ms postprocess per image at shape (1, 3, 384, 640)
+
+[4] Results:
+    Detections: 19
+      [0] Light_Motor: conf=0.986
+      [1] Three_Wheeler: conf=0.975
+      [2] Heavy_Motor: conf=0.905
+      [3] Heavy_Motor: conf=0.889
+      [4] Light_Motor: conf=0.853
+      [5] Light_Motor: conf=0.780
+      [6] Unknown_Mass: conf=0.693
+      [7] Unknown_Mass: conf=0.659
+      [8] Three_Wheeler: conf=0.618
+      [9] Unknown_Mass: conf=0.579
+
+[5] Segmentation Masks:
+    Masks present: 19
+    Mask data shape: torch.Size([19, 384, 640])
+      Mask 0: 14 vertices
+      Mask 1: 38 vertices
+      Mask 2: 66 vertices
+
+[6] Saving annotated output...
+    Saved: c:\traffic_optimizers\dataset\test_output.jpg
+
+============================================================
+DIAGNOSIS
+============================================================
+  MODEL WORKS! Check test_output.jpg

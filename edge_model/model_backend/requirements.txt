@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+paho-mqtt
+websockets
+numpy
+opencv-python
+requests
+ultralytics

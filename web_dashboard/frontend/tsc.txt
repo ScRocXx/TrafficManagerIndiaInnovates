@@ -1,0 +1,3 @@
+src/app/page.tsx(18,8): error TS2739: Type '{}' is missing the following properties from type 'SidebarProps': activeTab, setActiveTab
+src/components/Overlays.tsx(4,10): error TS2614: Module '"../app/page"' has no exported member 'vulnerabilitiesData'. Did you mean to use 'import vulnerabilitiesData from "../app/page"' instead?
+src/components/Overlays.tsx(116,41): error TS7006: Parameter 'notif' implicitly has an 'any' type.
