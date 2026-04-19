@@ -63,17 +63,19 @@ Conventional "smart traffic" solutions imported from the West break down because
                            │  • Per-Intersection Drill-Down          │
                            │  • Ambulance Alert Center               │
                            │  • CO₂ Savings Tracker                  │
+                           │  • Served via CloudFront + S3 (Private) │
                            └──────────────────┬──────────────────────┘
-                                              │ MQTT + REST API
+                                              │ REST API (HTTPS)
                            ┌──────────────────┴──────────────────────┐
-                           │      CLOUD BACKEND (FastAPI + SQLAlchemy)│
-                           │  • PostgreSQL / SQLite Persistence      │
-                           │  • MQTT Subscriber (HiveMQ)             │
+                           │  AWS CLOUD BACKEND (2× t3.medium EC2)   │
+                           │  • FastAPI API Server + Worker Process  │
+                           │  • Amazon RDS PostgreSQL (Multi-AZ)     │
+                           │  • AWS IoT Core (MQTT Broker)           │
                            │  • Ghost Node Physics Simulation (×23)  │
-                           │  • Device Health Monitoring              │
-                           │  • Render.com Cloud Deploy              │
+                           │  • Amazon CloudWatch Monitoring         │
+                           │  • AWS WAF + IAM Security               │
                            └──────────────────┬──────────────────────┘
-                                              │ MQTT (broker.hivemq.com)
+                                              │ MQTT (AWS IoT Core)
             ┌─────────────────────────────────┼──────────────────────────────┐
             │                                 │                              │
   ┌─────────┴─────────┐          ┌────────────┴────────────┐    ┌────────────┴──────────┐
@@ -99,8 +101,8 @@ Conventional "smart traffic" solutions imported from the West break down because
 | Tier | Component | Runs On | Purpose |
 |------|-----------|---------|---------|
 | **Tier 1: Edge** | Edge Node + AI Models | NVIDIA Jetson Nano | Real-time YOLO inference, signal control, V2X handling |
-| **Tier 2: Cloud Backend** | FastAPI + MQTT + PostgreSQL | Render.com / VPS | Data persistence, 25-node network aggregation, MCD API |
-| **Tier 3: Frontend** | Next.js Dashboard | Vercel / Static | Government operators monitor city-wide traffic, issue overrides |
+| **Tier 2: Cloud Backend** | FastAPI + MQTT + PostgreSQL | AWS EC2 (2× t3.medium) + RDS | Data persistence, 25-node network aggregation, MCD API |
+| **Tier 3: Frontend** | Next.js Dashboard | Amazon CloudFront + S3 (Private) | Government operators monitor city-wide traffic, issue overrides |
 
 ---
 
@@ -284,6 +286,99 @@ When V2X/GPS fails (common with older ambulances), the edge node's **I2S microph
 
 ---
 
+## 🔌 Traffic Signal Integration Layer
+
+Northern Blades is designed to **retrofit into existing Indian traffic cabinets** — not replace them. The integration layer sits between the AI brain (Jetson) and the physical signal heads, using industrial-grade isolation to ensure absolute safety.
+
+### Hardware Architecture
+
+```
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                          TRAFFIC CONTROL CABINET                            │
+│  ┌─────────────────┐                           ┌─────────────────────────┐  │
+│  │  Existing Timer  │◄── Manual Override ──────►│  Manual Switch Panel    │  │
+│  │  (Default Mode)  │    (HIGHEST PRIORITY)     │  (Operator / Traffic    │  │
+│  │  Fixed Cycle     │                           │   Police Access)        │  │
+│  └────────┬─────────┘                           └─────────────────────────┘  │
+│           │ Fallback Path (activates on AI failure)                          │
+│           ▼                                                                  │
+│  ┌────────────────────────────────────────────────────────────────────────┐   │
+│  │                    ⚡ OPTICAL ISOLATION BARRIER ⚡                     │   │
+│  │               (Optocouplers + Galvanic Isolation)                      │   │
+│  │         ━━━━  ELECTRICAL ISOLATION — NON-NEGOTIABLE  ━━━━             │   │
+│  └────────────────────────────────┬───────────────────────────────────────┘   │
+│                                   │                                          │
+│  ┌────────────────────────────────┴───────────────────────────────────────┐   │
+│  │               INDUSTRIAL RELAY / PLC MODULE                           │   │
+│  │           (DIN-rail mounted, 24V DC, UL/CE certified)                 │   │
+│  │                                                                       │   │
+│  │   Relay CH1 ──► Lane 1: RED │ YELLOW │ GREEN                         │   │
+│  │   Relay CH2 ──► Lane 2: RED │ YELLOW │ GREEN                         │   │
+│  │   Relay CH3 ──► Lane 3: RED │ YELLOW │ GREEN                         │   │
+│  │   Relay CH4 ──► Lane 4: RED │ YELLOW │ GREEN                         │   │
+│  └────────────────────────────────┬───────────────────────────────────────┘   │
+│                                   │ GPIO / RS-485 / Modbus                   │
+│  ┌────────────────────────────────┴───────────────────────────────────────┐   │
+│  │               EDGE AI UNIT (NVIDIA Jetson Orin Nano)                   │   │
+│  │                                                                       │   │
+│  │   TrafficEngine V6.1  →  Signal Command  →  MQTT/REST  →  PLC        │   │
+│  │   Watchdog Timer (HW)    Heartbeat @ 1Hz    TLS Encrypted             │   │
+│  └───────────────────────────────────────────────────────────────────────┘    │
+└───────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Integration Components
+
+| Component | Specification | Role |
+|-----------|--------------|------|
+| **Edge AI Unit** | NVIDIA Jetson Orin Nano (8GB) | Runs YOLO inference, Fluid Mass Engine, signal timing computation |
+| **Industrial Relay/PLC** | 4-channel, 24V DC, DIN-rail | Physically switches signal phases (R/Y/G) per lane |
+| **Isolation Circuit** | Optocoupler + galvanic barrier | **Electrically isolates** AI system from mains-voltage signal lines |
+| **Watchdog Timer** | Hardware WDT (independent IC) | Triggers fallback if Jetson fails to send heartbeat within 2s |
+| **Manual Override Panel** | Physical key-switch + toggle | Traffic police can override AI — **highest priority, always** |
+
+### Control Flow
+
+```
+┌──────────────────┐     MQTT / REST      ┌─────────────────────┐
+│  Jetson Orin     │ ──────────────────►  │  Relay / PLC        │
+│  Computes optimal│     (TLS encrypted)  │  Switches signal    │
+│  signal timing   │                      │  phases (R/Y/G)     │
+└──────────────────┘                      └──────────┬──────────┘
+                                                     │
+                                                     ▼
+                                          ┌─────────────────────┐
+                                          │  Traffic Signal Head │
+                                          │  (Physical lights)   │
+                                          └─────────────────────┘
+
+    ⚠️  If ANY failure detected:
+    ┌──────────────────────────────────────────────────────────────┐
+    │  Watchdog timeout / Power loss / Network failure / Crash    │
+    │           ▼                                                  │
+    │  PLC reverts to DEFAULT FIXED-TIMER (60s cycle)             │
+    │  No AI involvement — pure hardware fallback                  │
+    └──────────────────────────────────────────────────────────────┘
+```
+
+### ⚠️ Safety Mechanisms (Non-Negotiable)
+
+These safety guarantees are **hardcoded at the hardware level** and cannot be overridden by software:
+
+| Safety Layer | Trigger Condition | Response |
+|-------------|-------------------|----------|
+| **Electrical Isolation** | Always active | Optocoupler barrier prevents AI faults from reaching signal mains |
+| **Manual Override** | Physical key-switch engaged | Operator takes full control — **highest priority in the system** |
+| **Power Loss Fallback** | Mains power interrupted | PLC defaults to pre-programmed 60s fixed-timer cycle (battery-backed) |
+| **System Crash Fallback** | Jetson heartbeat missing > 2s | Hardware watchdog triggers PLC fallback mode automatically |
+| **Network Failure Fallback** | MQTT/REST connection lost > 5s | PLC reverts to last-known safe timing, then defaults to fixed-timer |
+| **Conflict Detection** | Contradictory signals (e.g., two greens) | PLC enforces ALL-RED until conflict resolved — hardware interlock |
+| **Graceful Degradation** | YOLO confidence < 15% (fog/smog) | Engine switches to 90s historical fixed-timer (Scenario #18) |
+
+> **Design Philosophy**: The AI system is a performance *enhancer*, not a safety-critical dependency. Remove the Jetson entirely, and the intersection continues operating on its original fixed-timer — exactly as it did before installation.
+
+---
+
 ## 🇮🇳 20+ India-Specific Edge Cases
 
 We designed and tested **20+ unique real-world scenarios** that all competitive solutions ignore:
@@ -405,9 +500,9 @@ The final trained model (`best.pt`) is included in `edge_model/dataset/` and is 
 |------------|---------|
 | **FastAPI** | REST API server |
 | **SQLAlchemy** | ORM for PostgreSQL / SQLite |
-| **PostgreSQL** | Production database (Render.com) |
+| **PostgreSQL** | Production database (Amazon RDS, Multi-AZ) |
 | **SQLite** | Local development database |
-| **Paho MQTT** | Subscribe to edge node telemetry via HiveMQ |
+| **AWS IoT Core SDK** | Subscribe to edge node telemetry (replaces HiveMQ) |
 | **Pydantic** | Request/response validation |
 | **Uvicorn** | ASGI server |
 
@@ -422,14 +517,18 @@ The final trained model (`best.pt`) is included in `edge_model/dataset/` and is 
 | **Lucide React** | Icon library |
 | **Tailwind CSS v4** | Utility-first styling |
 
-### Infrastructure
+### AWS Cloud Infrastructure
 
-| Service | Purpose |
-|---------|---------|
-| **Render.com** | Cloud backend deployment (Python + PostgreSQL) |
-| **Vercel** | Frontend deployment |
-| **HiveMQ** (Public Broker) | MQTT message broker for edge ↔ cloud communication |
-| **YouTube Live** | Backup video streaming for remote demos |
+| Service | Specification | Purpose |
+|---------|---------------|---------|
+| **Amazon EC2** | 2× `t3.medium` (API + Worker) | Cloud backend compute — API server + background physics worker |
+| **Amazon RDS** | PostgreSQL (small, Multi-AZ) | Managed database with automatic failover and daily backups |
+| **AWS IoT Core** | Managed MQTT broker | Secure, scalable MQTT for edge ↔ cloud communication (replaces HiveMQ) |
+| **Amazon CloudFront + S3** | Private distribution (no public domain) | Dashboard served behind auth — low latency, DDoS-resilient |
+| **Amazon CloudWatch** | Metrics + Alarms + Logs | 24/7 system monitoring, alerting, and centralized log aggregation |
+| **AWS WAF** | Web Application Firewall | API rate limiting, bot protection, SQL injection / XSS filtering |
+| **AWS IAM** | Identity & Access Management | Fine-grained service permissions, role-based access policies |
+| **YouTube Live** | Backup streaming | Backup video streaming for remote demos |
 
 ---
 
@@ -509,10 +608,92 @@ TrafficManagerIndiaInnovates/
 │       ├── package.json
 │       └── tsconfig.json
 │
-├── render.yaml                         # Render.com deployment config
+├── cloudformation.yaml                 # AWS CloudFormation deployment config
 ├── .gitignore
 └── README.md                           # ← You are here
 ```
+
+---
+
+## ☁️ Cloud Deployment Architecture (AWS)
+
+Northern Blades is deployed on **Amazon Web Services** — chosen for its government-grade compliance (AWS GovCloud eligible), multi-AZ reliability, and native IoT integration.
+
+### Deployment Topology
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│                              AWS CLOUD (ap-south-1 / Mumbai)                         │
+│                                                                                      │
+│  ┌────────────────────────────────────────────────────────────────────────────────┐   │
+│  │                           VPC (10.0.0.0/16)                                    │   │
+│  │                                                                                │   │
+│  │  ┌───────────────────────── Public Subnet ─────────────────────────────────┐   │   │
+│  │  │                                                                         │   │   │
+│  │  │  ┌─────────────────┐         ┌──────────────────────────────────────┐   │   │   │
+│  │  │  │  ALB (HTTPS)    │────────►│  EC2: t3.medium #1 (API Server)    │   │   │   │
+│  │  │  │  + AWS WAF      │         │  FastAPI + Uvicorn + Ghost Physics  │   │   │   │
+│  │  │  └─────────────────┘         └──────────────────────────────────────┘   │   │   │
+│  │  │                                                                         │   │   │
+│  │  │                              ┌──────────────────────────────────────┐   │   │   │
+│  │  │                              │  EC2: t3.medium #2 (Worker)         │   │   │   │
+│  │  │                              │  MQTT Subscriber + Data Pipeline    │   │   │   │
+│  │  │                              └──────────────────────────────────────┘   │   │   │
+│  │  └─────────────────────────────────────────────────────────────────────────┘   │   │
+│  │                                                                                │   │
+│  │  ┌───────────────────────── Private Subnet ────────────────────────────────┐   │   │
+│  │  │                                                                         │   │   │
+│  │  │  ┌──────────────────────────────────────┐                               │   │   │
+│  │  │  │  Amazon RDS PostgreSQL (Multi-AZ)    │                               │   │   │
+│  │  │  │  Primary + Standby (auto-failover)   │                               │   │   │
+│  │  │  │  Daily snapshots · 7-day retention   │                               │   │   │
+│  │  │  └──────────────────────────────────────┘                               │   │   │
+│  │  └─────────────────────────────────────────────────────────────────────────┘   │   │
+│  └────────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                      │
+│  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────────────────────┐  │
+│  │  AWS IoT Core    │   │  CloudFront + S3 │   │  Amazon CloudWatch               │  │
+│  │  (MQTT Broker)   │   │  (Dashboard CDN) │   │  • Metrics & Alarms              │  │
+│  │  • TLS mutual    │   │  • Private dist  │   │  • Log Groups                    │  │
+│  │    auth          │   │  • Behind auth   │   │  • Dashboard auto-alerts         │  │
+│  │  • Per-device    │   │  • No public URL │   │  • EC2 / RDS / IoT monitoring    │  │
+│  │    certificates  │   │                  │   │                                  │  │
+│  └────────┬─────────┘   └──────────────────┘   └──────────────────────────────────┘  │
+│           │                                                                          │
+└───────────┼──────────────────────────────────────────────────────────────────────────┘
+            │ MQTT over TLS (8883)
+            │
+  ┌─────────┴─────────────────────────────────────────────────┐
+  │                    EDGE NODES (Field)                      │
+  │  Jetson Orin Nano × N  ←  AWS IoT Device SDK (Python)     │
+  │  • X.509 certificate per device                           │
+  │  • Unique thing_name = junction_id                        │
+  └───────────────────────────────────────────────────────────┘
+```
+
+### AWS Service Breakdown
+
+| Service | Config | Monthly Est. | Role |
+|---------|--------|-------------|------|
+| **EC2** | 2× `t3.medium` (2 vCPU, 4GB RAM) | ~$60 | API server + async worker process |
+| **RDS PostgreSQL** | `db.t3.small`, Multi-AZ, 20GB gp3 | ~$45 | Managed DB with automatic failover |
+| **AWS IoT Core** | Pay-per-message | ~$5–15 | Secure MQTT — replaces self-hosted HiveMQ |
+| **CloudFront + S3** | Private distribution, OAI | ~$5 | Dashboard hosting behind authentication |
+| **CloudWatch** | Standard metrics + custom | ~$10 | Centralized monitoring and alerting |
+| **WAF** | Managed rules + custom rate limits | ~$10 | API protection layer |
+| **ALB** | Application Load Balancer | ~$20 | HTTPS termination + health checks |
+| | | **~$155–165/mo** | **Total estimated cloud cost** |
+
+### Why AWS?
+
+| Requirement | AWS Advantage |
+|-------------|---------------|
+| **Government Compliance** | AWS Mumbai region (ap-south-1) · Data residency in India · GovCloud eligible |
+| **IoT Native** | AWS IoT Core provides per-device X.509 certificates, thing shadows, and rules engine |
+| **High Availability** | Multi-AZ RDS failover · ALB health checks · Auto-restart on EC2 failure |
+| **Security** | WAF + Shield (DDoS) + IAM policies + VPC isolation + Security Groups |
+| **Observability** | CloudWatch metrics, alarms, and log groups — single pane for all services |
+| **Scalability** | Vertical (upgrade instance) or horizontal (add EC2 behind ALB) as city expands |
 
 ---
 
@@ -679,6 +860,95 @@ python poc_advanced.py    # Scenarios 11–20
 
 ---
 
+## 🔐 System Security Architecture
+
+Northern Blades handles critical urban infrastructure — security is not optional. Our multi-layered security architecture protects against unauthorized access, data breaches, and adversarial attacks.
+
+### Security Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        SECURITY PERIMETER                              │
+│                                                                        │
+│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐               │
+│  │ ACCESS       │   │ NETWORK      │   │ DATA         │               │
+│  │ CONTROL      │   │ SECURITY     │   │ SECURITY     │               │
+│  │              │   │              │   │              │               │
+│  │ • RBAC       │   │ • HTTPS/TLS  │   │ • AES-256    │               │
+│  │ • JWT Auth   │   │ • Rate Limit │   │ • Encrypted  │               │
+│  │ • Strong PWD │   │ • IP Whitelist│  │   Logs       │               │
+│  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘               │
+│         └──────────────────┼──────────────────┘                        │
+│                            ▼                                           │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │               COMMUNICATION SECURITY                             │  │
+│  │  • MQTT over TLS  • Device Auth (Unique ID/Junction)            │  │
+│  │  • Certificate Pinning  • Payload Signing                       │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                            ▼                                           │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │               THREAT DETECTION & RESPONSE                        │  │
+│  │  • Unauthorized Access Detection  • Auto Alert Logging          │  │
+│  │  • Temporary Lock on Suspicious Activity  • Audit Trail         │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 🔑 Access Control
+
+| Feature | Implementation |
+|---------|---------------|
+| **Role-Based Access (RBAC)** | Two-tier: **Admin** (full config + override) · **Operator** (monitoring + manual override only) |
+| **JWT Authentication** | Stateless token-based auth with 15-min access tokens + 7-day refresh tokens |
+| **Strong Password Policy** | Min 12 chars, mixed case, digit, special char · bcrypt hashing (cost factor 12) |
+| **Session Management** | Auto-logout after 30 min inactivity · concurrent session limits |
+| **MFA (Roadmap)** | TOTP-based two-factor authentication for Admin accounts |
+
+### 🌐 Network Security
+
+| Feature | Implementation |
+|---------|---------------|
+| **HTTPS / SSL-TLS** | All API endpoints served over TLS 1.3 — enforced at AWS ALB + CloudFront edge |
+| **API Rate Limiting** | 100 req/min per IP (configurable) — prevents brute-force and DDoS attempts |
+| **IP Whitelisting** | Optional: Restrict dashboard access to government network CIDR blocks only |
+| **CORS Policy** | Strict origin validation — only registered frontend domains accepted |
+| **Firewall Rules** | Edge nodes accept connections only from known cloud backend IPs |
+
+### 🗄️ Data Security
+
+| Feature | Implementation |
+|---------|---------------|
+| **Encrypted Storage** | All traffic logs and telemetry encrypted at rest (AES-256, PostgreSQL TDE) |
+| **Backup Strategy** | Daily incremental + weekly full backups · 30-day retention on cloud storage |
+| **Log Retention Policy** | Raw telemetry: 90 days · Aggregated analytics: 2 years · Audit logs: 5 years |
+| **Data Minimization** | Camera frames processed on-edge — only metadata (density %, timestamps) sent to cloud |
+| **PII Protection** | No license plate / facial data stored — segmentation masks only |
+
+### 📡 Communication Security
+
+| Feature | Implementation |
+|---------|---------------|
+| **MQTT over TLS** | All edge ↔ cloud MQTT traffic encrypted via mutual TLS (AWS IoT Core, port 8883) |
+| **Device Authentication** | Each junction issued a unique `device_id` + pre-shared key at provisioning |
+| **Payload Signing** | HMAC-SHA256 signature on all telemetry payloads — prevents message tampering |
+| **Certificate Pinning** | Edge nodes pin the broker's TLS certificate — prevents MITM attacks |
+| **Message Expiry** | Telemetry messages expire after 30s — stale data cannot trigger signal changes |
+
+### 🚨 Threat Detection & Response
+
+| Threat | Detection Method | Automated Response |
+|--------|-----------------|-------------------|
+| **Brute-Force Login** | 5 failed attempts in 5 min | Account locked for 15 min + alert to Admin |
+| **Unauthorized API Access** | Invalid/expired JWT on protected endpoint | Request rejected (401) + IP logged + alert |
+| **Anomalous Telemetry** | Density values outside physical bounds (> 100%) | Payload discarded + device flagged for inspection |
+| **Replay Attack** | Duplicate message nonce / timestamp outside window | Message rejected + security event logged |
+| **Suspicious Override** | Override command from unregistered IP or device | Command blocked + immediate alert to all Admins |
+| **MQTT Injection** | Malformed topic or payload on broker | Message dropped + device quarantined pending review |
+
+> **Audit Trail**: Every authentication event, API call, manual override, and security alert is logged to an append-only audit table with tamperproof timestamps — available for government compliance review.
+
+---
+
 ## 🌱 Environmental Impact
 
 Northern Blades estimates CO₂ savings using a validated model:
@@ -695,6 +965,69 @@ Saved idle time:   15% reduction vs fixed-timer baseline
 - Equivalent to planting **~8 trees/day**
 
 These metrics are calculated in real-time and displayed on the Government Dashboard, persisted to PostgreSQL for historical tracking.
+
+---
+
+## 🔧 Maintenance & Operations Plan
+
+Northern Blades is designed for **zero-downtime operations** with proactive maintenance cycles that keep the system reliable across Delhi's extreme conditions (48°C summers, monsoon floods, Diwali smog).
+
+### Maintenance Schedule
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    MAINTENANCE LIFECYCLE                             │
+│                                                                     │
+│  CONTINUOUS          MONTHLY              QUARTERLY                 │
+│  ───────────         ──────────           ────────────               │
+│  • 24/7 System       • Performance        • Hardware                │
+│    Monitoring           Report               Inspection             │
+│  • Auto Alert        • Model               • Camera Lens            │
+│    Logging             Recalibration         Cleaning               │
+│  • Remote Bug        • Dashboard           • Relay/PLC              │
+│    Fixing              Analytics Review      Testing                │
+│  • Health             • Security Patch     • Wiring &               │
+│    Heartbeats           Audit                Connector Check        │
+│                                            • Calibration            │
+│                                              Re-verification        │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 📋 Detailed Maintenance Matrix
+
+| Activity | Frequency | Owner | Description |
+|----------|-----------|-------|-------------|
+| **24/7 System Monitoring** | Continuous | Automated + NOC | Heartbeat checks, uptime tracking, anomaly detection via Government Dashboard |
+| **Auto Alert Logging** | Continuous | Automated | All faults, overrides, EVP events, and threshold breaches logged to PostgreSQL |
+| **Remote Bug Fixing** | As needed | Dev Team (SSH/VPN) | OTA patch deployment to Jetson nodes — no physical access required |
+| **Monthly Performance Report** | Monthly | Traffic Ops | Congestion trends, CO₂ savings, EVP response times, system uptime % |
+| **Model Recalibration** | Monthly | AI Team | Retrain YOLOv11m-seg with latest traffic patterns, seasonal adjustments, new edge cases |
+| **Dashboard Analytics Review** | Monthly | MCD Officers | Review peak hour trends, busiest intersections, optimization recommendations |
+| **Security Patch Audit** | Monthly | Security Team | Dependency vulnerability scan, certificate rotation, access log review |
+| **Hardware Inspection** | Quarterly | Field Engineers | Physical inspection of Jetson units, relay modules, cameras, wiring, and enclosures |
+| **Camera Lens Cleaning** | Quarterly | Field Engineers | Critical for Indian conditions — dust, pollen, monsoon residue, bird droppings |
+| **Relay/PLC Functional Test** | Quarterly | Field Engineers | Verify all relay channels switch correctly, test fallback modes |
+| **Calibration Re-verification** | Quarterly | AI Team + Field | Validate BEV homography matrices — re-calibrate if camera position has shifted |
+| **Full System Drill** | Quarterly | All Teams | Simulated failure scenarios — power loss, network drop, dual ambulance, manual override |
+
+### Monitoring Stack
+
+| Layer | Tool | What It Watches |
+|-------|------|-----------------|
+| **Application** | FastAPI `/health` + custom metrics | Engine state, inference latency, queue depth |
+| **Infrastructure** | Device Health API (Dashboard) | CPU temp, GPU utilization, disk space, memory |
+| **Network** | MQTT heartbeat (1Hz) | Edge ↔ Cloud connectivity, message delivery rate |
+| **Hardware** | Watchdog timer + PLC status register | Relay integrity, power supply voltage, enclosure temp |
+| **Security** | Audit log analysis + rate limit triggers | Failed logins, suspicious overrides, anomalous payloads |
+
+### Incident Response Protocol
+
+| Severity | Condition | Response Time | Action |
+|----------|-----------|---------------|--------|
+| **P0 — Critical** | Signal malfunction / safety hazard | < 15 min | Auto-fallback to fixed-timer + immediate field dispatch |
+| **P1 — High** | Edge node offline / inference failure | < 1 hour | Remote restart via SSH · PLC continues on last-known timing |
+| **P2 — Medium** | Degraded accuracy (fog/smog/dirt) | < 4 hours | Graceful degradation active · schedule lens cleaning |
+| **P3 — Low** | Dashboard UI issue / non-critical bug | < 24 hours | Remote patch deployment · no traffic impact |
 
 ---
 
