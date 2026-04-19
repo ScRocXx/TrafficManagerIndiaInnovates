@@ -1,6 +1,5 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Team-Northern%20Blades-blue?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Engine-V6.1-brightgreen?style=for-the-badge" />
   <img src="https://img.shields.io/badge/AI-YOLOv11m--seg-red?style=for-the-badge" />
   <img src="https://img.shields.io/badge/Edge-Jetson%20Nano-76B900?style=for-the-badge&logo=nvidia" />
 </p>
@@ -38,7 +37,7 @@ Conventional "smart traffic" solutions imported from the West break down because
 ---
 
 ## 💡 Our Solution 
-**Northern Blades** is a production-grade, edge-AI traffic management platform that replaces fixed-timer signals with a **Fluid Mass Physics Engine** — treating traffic not as countable individual vehicles, but as a continuous fluid whose **pressure** ($P = N \times T$) determines which direction gets the green light.
+**Northern Blades** built  traffic management platform that replaces fixed-timer signals with a **Fluid Mass Physics Engine** — treating traffic not as countable individual vehicles, but as a continuous fluid whose **pressure** ($P = N \times T$) determines which direction gets the green light.
 
 ### Key Innovations
 
@@ -188,8 +187,8 @@ The heart of Northern Blades is a **finite state machine** that makes signal dec
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  RANK 0: PHYSICS (Absolute Veto)                           │
-│  • Exit Jam > 85% → Lane physically blocked, DISQUALIFIED  │
-│  • Box Density > 80% → ALL-RED DYNAMIC HOLD                │
+│  • Exit Jam > 65% → Lane physically blocked, DISQUALIFIED  │
+│  • Box Density > 90% → ALL-RED DYNAMIC HOLD                │
 ├─────────────────────────────────────────────────────────────┤
 │  RANK 1: LIFE SAFETY                                       │
 │  • V2X Ambulance detected → Instant Green Override         │
@@ -287,7 +286,7 @@ When V2X/GPS fails (common with older ambulances), the edge node's **I2S microph
 
 ## 🇮🇳 20+ India-Specific Edge Cases
 
-We designed and tested **20 unique real-world scenarios** that all competitive solutions ignore:
+We designed and tested **20+ unique real-world scenarios** that all competitive solutions ignore:
 
 | # | Scenario | Indian Context | Engine Response |
 |---|----------|---------------|-----------------|
