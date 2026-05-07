@@ -68,7 +68,7 @@ export default function PeakHoursView({ setActiveTab }: { setActiveTab?: (tab: s
   useEffect(() => {
     const fetchGlobalStats = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/stats`);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://trafficmanager-northernblades.onrender.com'}/api/stats`);
         const data = await res.json();
         if (data.totalCO2Saved) {
           co2AccumRef.current = data.totalCO2Saved;

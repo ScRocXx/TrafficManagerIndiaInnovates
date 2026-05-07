@@ -82,7 +82,7 @@ export default function Home() {
     
     const fetchLive = async () => {
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://trafficmanager-northernblades.onrender.com";
         const res = await fetch(`${API_URL}/api/traffic`);
         if (!res.ok) return;
         const data: any[] = await res.json();

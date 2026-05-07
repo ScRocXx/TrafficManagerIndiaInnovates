@@ -212,7 +212,7 @@ export function useNetworkStatus() {
       let networkNodes: NetworkNode[] | null = null;
 
       // 1. Try configured backend
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://trafficmanager-northernblades.onrender.com";
       try {
         const res = await fetch(`${API_URL}/api/network-status`, { signal: AbortSignal.timeout(4000) });
         const data = await res.json();

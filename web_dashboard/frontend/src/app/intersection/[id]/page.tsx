@@ -589,7 +589,7 @@ export default function IntersectionPage() {
     
     const fetchTraffic = async () => {
       try {
-        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://trafficmanager-northernblades.onrender.com";
         const res = await fetch(`${API_URL}/api/traffic/${intersection.nodeId}`);
         if (!res.ok) return;
         const data = await res.json();
@@ -806,7 +806,7 @@ export default function IntersectionPage() {
     }
 
     // Send Jetson API Call
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://trafficmanager-northernblades.onrender.com";
     fetch(`${API_URL}/api/override`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -850,7 +850,7 @@ export default function IntersectionPage() {
     }
 
     // Send Jetson API Call
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://trafficmanager-northernblades.onrender.com";
     fetch(`${API_URL}/api/override`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -868,7 +868,7 @@ export default function IntersectionPage() {
 
     // Also clear the alert on the backend
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://trafficmanager-northernblades.onrender.com";
       await fetch(`${API_URL}/api/ambulance-alerts/${intersection?.nodeId}/clear`, { method: "POST" });
     } catch (e) {
       // non-critical
@@ -1210,7 +1210,7 @@ export default function IntersectionPage() {
                       codeRedStartRef.current = Date.now();
                       setCodeRedTimer(0);
                       
-                      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+                      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://trafficmanager-northernblades.onrender.com";
                       fetch(`${API_URL}/api/override`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -1225,7 +1225,7 @@ export default function IntersectionPage() {
                       setCodeRedTimer(0);
                       codeRedStartRef.current = 0;
 
-                      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://india-innovate-backend.onrender.com";
+                      const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://trafficmanager-northernblades.onrender.com";
                       fetch(`${API_URL}/api/override`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
